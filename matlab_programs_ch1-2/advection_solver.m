@@ -8,11 +8,11 @@ set(groot,'DefaultAxesFontSize',14)
 set(groot,'DefaultTextFontSize',14)
 
 n = 20;         % number of elements
-Tf = 2;         % final time
+Tf = 5;         % final time
 periodic = 0;   % switch between Dirichlet conditions (0) and periodic (1)
 k = 1;          % polynomial degree
 a = +1;         % advection speed
-Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
+Cr = 0.5/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 left = 0;       % left end of the domain
 right = 1;      % right end of the domain
@@ -156,6 +156,7 @@ ylabel('u_h(x)')
 title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
 %legend('u_h(x,0)',['u_h(x,' num2str(Tf) ')'],['u(x,' num2str(Tf) ')'])
 legend(['u_h(x,' num2str(Tf) ')'],['u(x,' num2str(Tf) ')'])
+hold off
 
 % compute error
 l2error = 0;

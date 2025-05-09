@@ -3,12 +3,12 @@
 % the backward Euler method and the trapezoidal rule are implemented.
 % The program assumes a constant transport speed a > 0
 
-%clear all
+% clear all
 
 set(groot,'DefaultAxesFontSize',14)
 set(groot,'DefaultTextFontSize',14)
 
-n = 40;         % number of elements
+n = 20;         % number of elements
 Tf = 5;         % final time
 periodic = 0;   % switch between Dirichlet conditions (0) and periodic (1)
 k = 1;          % polynomial degree
