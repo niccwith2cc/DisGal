@@ -3,16 +3,17 @@
 % Constant transport speed a
 
 clear all
+close all
 
 set(groot,'DefaultAxesFontSize',14)
 set(groot,'DefaultTextFontSize',14)
 
-n = 20;         % number of elements
-Tf = 5;         % final time
-periodic = 0;   % switch between Dirichlet conditions (0) and periodic (1)
-k = 1;          % polynomial degree
+n = 80;         % number of elements
+Tf = 2;         % final time
+periodic = 1;   % switch between Dirichlet conditions (0) and periodic (1)
+k = 7;          % polynomial degree
 a = +1;         % advection speed
-Cr = 0.5/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
+Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 left = 0;       % left end of the domain
 right = 1;      % right end of the domain
@@ -20,8 +21,8 @@ time_integrator = 'rk4'; % rk4, bw_euler, trapezoidal, fw_euler
 plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
 
 % analytical solution
-analytical = @(x,t)sin(4*pi*(x-a*t));
-% analytical = @(x,t)exp(sin(4*pi*(x-a*t)));
+% analytical = @(x,t)sin(4*pi*(x-a*t));
+analytical = @(x,t)exp(sin(4*pi*(x-a*t)));
 %analytical = @(x,t)(abs(2*mod(x-a*t,1)-1));
 %analytical = @(x,t)(mod(x-a*t,1)>0.5);
 
@@ -50,12 +51,14 @@ end
 % compute time step from Cr number, adjust to hit the desired final time
 % exactly
 dt = Cr * min(h) / abs(a);
+% dt = 0.4*h/( k^2* abs(a) );
 NT = round(Tf/dt);
 dt = Tf/NT;
 
 disp(['Number of elements: ' num2str(n) ', minimum mesh size: ' ...
     num2str(min(h)) ', time step size: ' num2str(dt) ])
 
+tic;
 % flux matrix on a single interface
 Fe = 0.5*a*[1 1; -1 -1] + 0.5*abs(a)*(1-alpha)*[1 -1; -1 1];
 
@@ -183,6 +186,33 @@ disp(['Error in maximum norm ' num2str(linfty_error) ' in L2 norm ' num2str(l2er
 %     axis([0 1 -1.2 1.2])
 %     pause(0.05)
 % end
+toc;
+
+figure(2)
+[v,d] = eig(full(Minv*(S'-F)/a));
+d = diag(d);
+plot(d/(n*(kp1)), '.')
+xlim([-9 1])
+ylim([-5 5])
+yticks(-5:1:5);
+xlabel("real")
+ylabel("imag")
+title(['eigenval n(k+1), k = ' num2str(k)])
+grid on;
+
+hold on;
+x = linspace(-9, 1, 1000);
+y = linspace(-5, 5, 1000);
+[X, Y] = meshgrid(x, y);
+Z = X + 1i*Y;
+
+% RK4 stability function
+R = 1 + Z + Z.^2/2 + Z.^3/6 + Z.^4/24;
+contour(X, Y, abs(R), [1 1], 'k', 'LineWidth', 1)
+
+
+legend('DG Eigenvalues', 'RK4 Stability Region');
+
 
 return;
 

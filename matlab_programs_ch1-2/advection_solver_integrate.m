@@ -2,11 +2,13 @@ function advection_solver_integrate
 % 1D advection solver based on pointwise evaluation of fluxes and using
 % integrals for the element advection term
 % Assumption: Nodal polynomials with node points at interval end points
+close all
+clear
 
-n = 20;         % number of elements
+n = 100;         % number of elements
 Tf = 2;         % final time
 periodic = 1;   % switch between Dirichlet conditions (0) and periodic (1)
-k = 4;          % polynomial degree
+k = 5;          % polynomial degree
 a = +1;         % advection speed
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
@@ -17,9 +19,9 @@ plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
 
 % analytical solution
 %analytical = @(x,t)sin(4*pi*(x-a*t));
-analytical = @(x,t)exp(sin(4*pi*(x-a*t)));
-%analytical = @(x,t)(abs(2*mod(x-a*t,1)-1));
-%analytical = @(x,t)(mod(x-a*t,1)>0.5);
+% analytical = @(x,t)exp(sin(4*pi*(x-a*t)));
+analytical = @(x,t)(abs(2*mod(x-a*t,1)-1));
+% analytical = @(x,t)(mod(x-a*t,1)>0.5);
 
 % set quadrature formula and quadrature nodes for integration
 [pg,wg] = get_gauss_quadrature(nc); 
@@ -53,6 +55,7 @@ dt = Tf/NT;
 disp(['Number of elements: ' num2str(n) ', minimum mesh size: ' ...
     num2str(min(h)) ', time step size: ' num2str(dt) ])
 
+tic;
 % evaluate reference cell polynomials and mass matrix
 [values,derivatives] = evaluate_lagrange_basis(xunit, pg);
 Me = values * diag(wg) * values';
@@ -128,6 +131,7 @@ end
 l2error = sqrt(l2error);
     
 disp(['Error in maximum norm ' num2str(linfty_error) ' in L2 norm ' num2str(l2error)])
+toc;
 
 end
 
