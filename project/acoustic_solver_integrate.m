@@ -1,4 +1,4 @@
-function acoustic_solver_integrate
+% function acoustic_solver_integrate
 % 1D acoustic solver based on pointwise evaluation of fluxes and using
 % integrals for the element advection term
 % Assumption: Nodal polynomials with node points at interval end points
@@ -19,7 +19,7 @@ right = 1;      % right end of the domain
 plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
 
 % analytical solution
-%analytical = @(x,t)sin(4*pi*(x-a*t));
+% analytical = @(x,t)sin(4*pi*(x-a*t));
 % analytical = @(x,t)exp(sin(4*pi*(x-a*t)));
 % analytical = @(x,t)(abs(2*mod(x-a*t,1)-1));
 % analytical = @(x,t)(mod(x-a*t,1)>0.5);
@@ -63,145 +63,173 @@ tic;
 % evaluate reference cell polynomials and mass matrix
 [values,derivatives] = evaluate_lagrange_basis(xunit, pg);
 Me = values * diag(wg) * values';
-Minv = sparse(2*kp1*n,2*kp1*n);
+Minv = sparse(2*kp1*n, 2*kp1*n);
 for e=1:n
-    Mloc = blkdiag(inv(0.5*h(e)*Me), inv(0.5*h(e)*Me));
-    Minv((2*kp1)*(e-1)+ 1:(2*kp1)*e, (2*kp1)*(e-1)+1:(2*kp1)*e) = Mloc;
+    Mloc = inv(0.5 * h(e) * Me);
+    Minv( (kp1*e-k):kp1*e, (kp1*e-k):kp1*e ) = (1/rho)*Mloc; % for v
+    Minv( (e+n)*kp1-k:(e+n)*kp1, (e+n)*kp1-k:(e+n)*kp1 ) = (1/(rho * c^2))*Mloc; % for p
 end
 
-% set initial condition
-v0=@(x) cos(pi*x);
-p0=@(x) sin(pi*x);
-w0 = [v0(x); p0(x)];
+% set initial conditions
 w = zeros(2*kp1*n, NT+1);
+w0 = [analytical_v(x, 0), analytical_p(x, 0)];
 w(:, 1) = w0;
 
 % run time loop
 for m=1:NT
-    k1 = Minv * evaluate_acoustic_rhs(w(:,m), values, derivatives, wg, alpha, periodic);
+    k1 = Minv * evaluate_acoustic_rhs(w(:, m), c, [analytical_v(0, (m-1)*dt); analytical_v(1, (m-1)*dt); analytical_p(0, (m-1)*dt); analytical_p(1, (m-1)*dt)], values, derivatives, wg, alpha, periodic);
 
-    k2 = Minv * evaluate_acoustic_rhs(w(:,m) + 0.5*dt*k1, values, derivatives, wg, alpha, periodic);
+    k2 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k1, c, [analytical_v(0, (m-0.5)*dt); analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt); analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
                  
-    k3 = Minv * evaluate_acoustic_rhs(w(:,m) + 0.5*dt*k2, values, derivatives, wg, alpha, periodic);
+    k3 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k2, c, [analytical_v(0, (m-0.5)*dt) ; analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt) ; analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
 
-    k4 = Minv * evaluate_acoustic_rhs(w(:,m) + dt*k3, values, derivatives, wg, alpha, periodic);
+    k4 = Minv * evaluate_acoustic_rhs(w(:, m) + dt*k3, c, [analytical_v(0, m*dt); analytical_v(1, m*dt); analytical_p(0, m*dt); analytical_p(1, m*dt)], values, derivatives, wg, alpha, periodic);
     
-    w(:,m+1) = w(:,m) + dt/6*(k1+2*k2+2*k3+k4);
+    w(:, m+1) = w(:, m) + dt/6*(k1+2*k2+2*k3+k4);
 end
 
 % plot the numerical solution (red), the analytical solution (blue), and
 % the initial condition
 figure(1)
 if plot_accurate == 1
+    xx_unit = -1:0.05:1;
+    xx = zeros(n,length(xx_unit));
+    vv_0 = zeros(size(xx));
+    vv = zeros(size(xx));
+    val = evaluate_lagrange_basis(xunit, xx_unit);
     for e=1:n
-        xx_unit = linspace(y(2*e-1), y(2*e), 50);
-        [~, val] = evaluate_lagrange_basis(xunit, 2*(xx_unit - y(2*e-1))/h(e) - 1);
-        we = w((2*kp1)*(e-1)+1:(2*kp1)*e, end);
-        v_num = val' * we(1:kp1);
-        p_num = val' * we(kp1+1:end);
-        plot(xx_unit, p_num, 'r-', xx_unit, p_anal(xx_unit, Tf), 'b--'); hold on;
+        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
+        vv_0(e, :) = val' * w(e*kp1-k:e*kp1, 1);
+        vv(e, :) = val' * w(e*kp1-k:e*kp1, end);
     end
-    legend("Numerical p", "Exact p");
-    xlabel("x"); ylabel("(p(x, Tf)");
-    title("1D Acoustic Wave Equation");
+    v_anal = analytical_v(xx, Tf);
+    plot(xx(1,:),vv_0(1,:),'k:',xx(1,:),vv(1,:),'r-',xx(1,:),v_anal(1,:),'b');
+    hold on
+    plot(xx',vv_0','k:');
+    plot(xx',vv','r-');
+    plot(xx',v_anal','b-');
+    hold off
 else
-%     plot(x,u(:,1),'k:',x,u(:,end),'r-',x,analytical(x,Tf),'b')
+    v_s = w(e*kp1-k:e*kp1, 1);
+    v_f = w(e*kp1-k:e*kp1, end);
+    plot(x,v_s,'k:', x, v_f,'r-', x, analytical_v(x, Tf),'b')
 end
-% xlabel('x')
-% ylabel('u_h(x)')
-% title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
-% legend('u_h(x,0)',['u_h(x,' num2str(Tf) ')'],['u(x,' num2str(Tf) ')'])
-% 
-% l2error = 0;
-% linfty_error = 0;
-% [pg_err,wg_err] = get_gauss_quadrature(k+3);
-% values_err = evaluate_lagrange_basis(xunit, pg_err);
-% for e=1:n
-%     sol_num = values_err' * u((e-1)*kp1+1:e*kp1,end);
-%     x_err = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*pg_err);
-%     sol_exact = analytical(x_err, Tf);
-%     l2error = l2error + h(e)/2 * wg_err' * (sol_num-sol_exact).^2;
-%     linfty_error = max([linfty_error; abs(sol_num-sol_exact)]);
-% end
-% l2error = sqrt(l2error);
-%     
-% disp(['Error in maximum norm ' num2str(linfty_error) ' in L2 norm ' num2str(l2error)])
+xlabel('x')
+ylabel('v_h(x)')
+title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
+legend('v_h(x,0)',['v_h(x,' num2str(Tf) ')'],['v(x,' num2str(Tf) ')'])
+
+figure(2)
+if plot_accurate == 1
+    xx_unit = -1:0.05:1;
+    xx = zeros(n,length(xx_unit));
+    pp_0 = zeros(size(xx));
+    pp = zeros(size(xx));
+    val = evaluate_lagrange_basis(xunit, xx_unit);
+    for e=1:n
+        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
+        pp_0(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, 1);
+        pp(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, end);
+    end  
+    p_anal = analytical_p(xx, Tf);
+    plot(xx(1,:),pp_0(1,:),'k:',xx(1,:),pp(1,:),'r-',xx(1,:),p_anal(1,:),'b');
+    hold on
+    plot(xx',pp_0','k:');
+    plot(xx',pp','r-');
+    plot(xx',p_anal','b-');
+    hold off
+else
+    p_s = w((e+n)*kp1-k: (e+n)*kp1, 1);
+    p_f = w((e+n)*kp1-l: (e+n)*kp1, end);
+    plot(x,p_s,'k:', x, p_f,'r-', x, analytical_p(x, Tf),'b')
+end
+xlabel('x')
+ylabel('p_h(x)')
+title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
+legend('p_h(x,0)',['p_h(x,' num2str(Tf) ')'],['p(x,' num2str(Tf) ')'])
+
+l2error = 0;
+linfty_error = 0;
+[pg_err,wg_err] = get_gauss_quadrature(k+3);
+values_err = evaluate_lagrange_basis(xunit, pg_err);
+for e=1:n
+    sol_num = values_err' * w((e+n-1)*kp1+1:(e+n)*kp1, end);
+    x_err = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*pg_err);
+    sol_exact = analytical_p(x_err, Tf);
+    l2error = l2error + h(e)/2 * wg_err' * (sol_num-sol_exact).^2;
+    linfty_error = max([linfty_error; abs(sol_num-sol_exact)]);
+end
+l2error = sqrt(l2error);
+
+disp(['Error in maximum norm ' num2str(linfty_error) ' in L2 norm ' num2str(l2error)])
 toc;
 
-end
+% end
 
 
-function rhs = evaluate_acoustic_rhs(w, values, derivatives, wg, alpha, periodic)
+function rhs = evaluate_acoustic_rhs(w, c, bc, values, derivatives, weights, alpha, periodic)
 
 kp1 = size(values, 1); % degree + 1
-n = length(w)/kp1;
+n = length(w)/(2*kp1);
 rhs = zeros(size(w));
-c = 1; rho = 1;
 
-for e = 1:n
-    ind = (2*kp1)*(e-1)+1 : (2*kp1)*e;
-    ve = w(ind(1:kp1));
-    pe = w(ind(kp1+1:end));
+for e=1:n
+    ve = w((e-1)*kp1+1: e*kp1); % 1 to kp1*n
+    pe = w((e+n-1)*kp1+1: (e+n)*kp1); % from kp1*n+1 to 2*kp1*n
+    % interpolate v to quadrature points
+    v_quad = (values')*ve;
+    p_quad = (values')*pe;
+
+    flux_v = weights .* p_quad;
+    flux_p = weights .* v_quad;
+    % compute operator at quadrature points and multiply by gradient of
+    % test function
+    rhs((e-1)*kp1+1: e*kp1) = derivatives * flux_v;
+    rhs((e+n-1)*kp1+1: (e+n)*kp1) = derivatives * flux_p;
     
-    vq = values'*ve; pq = values'*pe;
-
-    rhs_v = derivatives * ((diag(wg)) * pq);
-    rhs_p = derivatives * (diag(wg) * vq);
-
-    rhs(ind(1:kp1)) = rhs_v;
-    rhs(ind(kp1+1:end)) = rhs_p;
-    
-    % Numerical flux
-%     vminus = ve(1);
-%     pminus = pe(1);
+    % compute acoustic numerical flux on the left
+    vminus = ve(1);
+    pminus = pe(1);
     if (e==1)
         if (periodic)
             % periodic bc
-            vplus = w((2*kp1)*(n-1)+kp1);
-            pplus = w((2*kp1)*(n-1)+ 2*kp1);
+            vplus = w(kp1*n); % last value in the velocity
+            pplus = w(2*kp1*n);
         else
             % Dirichlet condition, implemented via mirror principle
-            vplus = ve(1);
-            pplus = -pe(1);
+            vplus = 2*bc(1)-vminus;
+            pplus = 2*bc(3)-pminus;
         end
     else
-        vplus = w((2*kp1)*(e-2)+kp1); 
-        pplus = w((2*kp1)*(e-2)+2*kp1);
+        vplus = w((e-1)*kp1); % e > 1: w(kp1:(e-1)*kp1)
+        pplus = w((e+n-1)*kp1); 
     end
-    vminus = ve(1);
-    pminus = pe(1);
+    numflux_v = (vminus+vplus)/2 + (1-alpha)/2 * abs(c) *(pminus-pplus);
+    numflux_p = (pminus+pplus)/2 + (1-alpha)/2 * abs(c) *(vminus-vplus);
+    rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
+    rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
     
-    v_star = 0.5*(vminus + vplus) + (1-alpha)/(2*rho*c)*(pminus - pplus);
-    p_star = 0.5*(pminus + pplus) + (1-alpha)*0.5*c*rho(vminus - vplus);
-
-    rhs(ind(1)) = rhs(ind(1)) + (p_star - pminus);
-    rhs(ind(kp1+1)) = rhs(ind(kp1+1)) + (v_star  - vminus);
-
-    % compute advective numerical flux on the right
-%     vminus = ve(kp1);
-%     pminus = pe(kp1);
+    % compute acoustic numerical flux on the right
+    vminus = ve(kp1);
+    pminus = pe(kp1);
     if (e==n)
         if (periodic)
             % periodic bc
-            vplus = w(kp1);
-            pplus = w(2*kp1);
+            vplus = w(1);
+            pplus = w(kp1*n+1);
         else
             % Dirichlet condition, implemented via mirror principle
-           vplus = ve(end);
-           pplus = -pe(end);
+            vplus = 2*bc(2)-vminus;
+            pplus = 2*bc(4)-pminus;
         end
     else
-        vplus = w((2*kp1)*e+1);
-        pplus = w((2*kp1)*e+kp1+1);
+        vplus = w(e*kp1+1);
+        pplus = w((e+n)*kp1+1);
     end
-    vminus = ve(end);
-    pminus = pe(end);
-
-    v_star = 0.5*(vminus + vplus) + (1-alpha)/(2*rho*c)*(pminus - pplus);
-    p_star = 0.5*(pminus + pplus) + (1-alpha)*0.5*c*rho(vminus - vplus);
-
-    rhs(ind(kp1)) = rhs(ind(kp1)) - (p_star - pminus);
-    rhs(ind(end)) = rhs(ind(end)) - (v_star  - vminus);  
+    numflux_v = (vminus+vplus)/2 + (1-alpha)/2 * abs(c)*(pminus-pplus);
+    numflux_p = (pminus+pplus)/2 + (1-alpha)/2 * abs(c)*(vminus-vplus);
+    rhs(e*kp1) = rhs(e*kp1) - numflux_v;
+    rhs((e+n)*kp1) = rhs((e+n)*kp1) - numflux_p;
 end
 
 end
