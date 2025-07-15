@@ -5,12 +5,12 @@
 close all
 clear
 
-n = 40;         % number of elements
+n = 20;         % number of elements
 Tf = 2;         % final time
 periodic = 0;   % switch between Dirichlet conditions (0) and periodic (1)
-k = 5;          % polynomial degree
-c = +1;         % advection speed
-rho = +1;       % density
+k = 2;          % polynomial degree
+c = 1;         % advection speed
+rho = 1;       % density
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 nc = k+1;       % number of quadrature points
@@ -23,8 +23,9 @@ plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
 % analytical = @(x,t)exp(sin(4*pi*(x-a*t)));
 % analytical = @(x,t)(abs(2*mod(x-a*t,1)-1));
 % analytical = @(x,t)(mod(x-a*t,1)>0.5);
-analytical_p = @(x,t)sin(pi*x).*sin(pi*t);
-analytical_v = @(x,t)cos(pi*x).*cos(pi*t);
+analytical_v = @(x,t)cos(pi*x)*cos(pi*t);
+analytical_p = @(x,t)sin(pi*x)*sin(pi*t);
+
 
 % set quadrature formula and quadrature nodes for integration
 [pg,wg] = get_gauss_quadrature(nc); 
@@ -66,8 +67,8 @@ Me = values * diag(wg) * values';
 Minv = sparse(2*kp1*n, 2*kp1*n);
 for e=1:n
     Mloc = inv(0.5 * h(e) * Me);
-    Minv( (kp1*e-k):kp1*e, (kp1*e-k):kp1*e ) = (1/rho)*Mloc; % for v
-    Minv( (e+n)*kp1-k:(e+n)*kp1, (e+n)*kp1-k:(e+n)*kp1 ) = (1/(rho * c^2))*Mloc; % for p
+    Minv( (kp1*e-k):kp1*e, (kp1*e-k):kp1*e ) = Mloc; % for v
+    Minv( (e+n)*kp1-k:(e+n)*kp1, (e+n)*kp1-k:(e+n)*kp1 ) = Mloc; % for p
 end
 
 % set initial conditions
@@ -77,13 +78,13 @@ w(:, 1) = w0;
 
 % run time loop
 for m=1:NT
-    k1 = Minv * evaluate_acoustic_rhs(w(:, m), c, [analytical_v(0, (m-1)*dt); analytical_v(1, (m-1)*dt); analytical_p(0, (m-1)*dt); analytical_p(1, (m-1)*dt)], values, derivatives, wg, alpha, periodic);
+    k1 = Minv * evaluate_acoustic_rhs(w(:, m), c, rho, [analytical_v(0, (m-1)*dt); analytical_v(1, (m-1)*dt); analytical_p(0, (m-1)*dt); analytical_p(1, (m-1)*dt)], values, derivatives, wg, alpha, periodic);
 
-    k2 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k1, c, [analytical_v(0, (m-0.5)*dt); analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt); analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
+    k2 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k1, c, rho, [analytical_v(0, (m-0.5)*dt); analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt); analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
                  
-    k3 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k2, c, [analytical_v(0, (m-0.5)*dt) ; analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt) ; analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
+    k3 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k2, c, rho, [analytical_v(0, (m-0.5)*dt) ; analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt) ; analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
 
-    k4 = Minv * evaluate_acoustic_rhs(w(:, m) + dt*k3, c, [analytical_v(0, m*dt); analytical_v(1, m*dt); analytical_p(0, m*dt); analytical_p(1, m*dt)], values, derivatives, wg, alpha, periodic);
+    k4 = Minv * evaluate_acoustic_rhs(w(:, m) + dt*k3, c, rho, [analytical_v(0, m*dt); analytical_v(1, m*dt); analytical_p(0, m*dt); analytical_p(1, m*dt)], values, derivatives, wg, alpha, periodic);
     
     w(:, m+1) = w(:, m) + dt/6*(k1+2*k2+2*k3+k4);
 end
@@ -167,7 +168,8 @@ toc;
 % end
 
 
-function rhs = evaluate_acoustic_rhs(w, c, bc, values, derivatives, weights, alpha, periodic)
+function rhs = evaluate_acoustic_rhs(w, c, rho, bc, values, derivatives, weights, alpha, periodic)
+% disp(['this is velocity bc: ', num2str(bc(1))])
 
 kp1 = size(values, 1); % degree + 1
 n = length(w)/(2*kp1);
@@ -176,9 +178,11 @@ rhs = zeros(size(w));
 for e=1:n
     ve = w((e-1)*kp1+1: e*kp1); % 1 to kp1*n
     pe = w((e+n-1)*kp1+1: (e+n)*kp1); % from kp1*n+1 to 2*kp1*n
+    disp(['size of pe: ', num2str(length(pe))])
+
     % interpolate v to quadrature points
-    v_quad = (values')*ve;
-    p_quad = (values')*pe;
+    v_quad = values' * ve;
+    p_quad = values' * pe;
 
     flux_v = weights .* p_quad;
     flux_p = weights .* v_quad;
@@ -197,15 +201,16 @@ for e=1:n
             pplus = w(2*kp1*n);
         else
             % Dirichlet condition, implemented via mirror principle
-            vplus = 2*bc(1)-vminus;
+%             vplus = 2*bc(1)-vminus;
             pplus = 2*bc(3)-pminus;
+            vplus = -ve(1);
         end
     else
         vplus = w((e-1)*kp1); % e > 1: w(kp1:(e-1)*kp1)
         pplus = w((e+n-1)*kp1); 
     end
-    numflux_v = (vminus+vplus)/2 + (1-alpha)/2 * abs(c) *(pminus-pplus);
-    numflux_p = (pminus+pplus)/2 + (1-alpha)/2 * abs(c) *(vminus-vplus);
+    numflux_v = 1/2*c*rho^2 * (vminus + vplus) + 1/2 * abs(c) * (pminus - pplus);
+    numflux_p = 1/(2*rho) * (pminus + pplus) + 1/2 * abs(c) * (vminus - vplus);
     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
     
@@ -219,17 +224,99 @@ for e=1:n
             pplus = w(kp1*n+1);
         else
             % Dirichlet condition, implemented via mirror principle
-            vplus = 2*bc(2)-vminus;
+%             vplus = 2*bc(2)-vminus;
             pplus = 2*bc(4)-pminus;
+            vplus = -ve(end);
         end
     else
         vplus = w(e*kp1+1);
         pplus = w((e+n)*kp1+1);
     end
-    numflux_v = (vminus+vplus)/2 + (1-alpha)/2 * abs(c)*(pminus-pplus);
-    numflux_p = (pminus+pplus)/2 + (1-alpha)/2 * abs(c)*(vminus-vplus);
+    numflux_v = 1/2*c*rho^2 * (vminus + vplus) + 1/2 * abs(c)*(pplus - pminus);
+    numflux_p = 1/(2*rho) * (pminus + pplus) + 1/2 * abs(c)*(vplus - vminus);
     rhs(e*kp1) = rhs(e*kp1) - numflux_v;
     rhs((e+n)*kp1) = rhs((e+n)*kp1) - numflux_p;
 end
 
 end
+
+% function rhs = evaluate_acoustic_rhs_hdg(w, c, rho, bc, values, derivatives, weights, tau, periodic)
+% % HDG flux implementation for 1D acoustic wave equation
+% % Inputs:
+% %   w        - full solution vector: [v; p]
+% %   c, rho   - physical constants
+% %   bc       - [vL, vR, pL, pR] Dirichlet boundary values
+% %   tau      - stabilization parameter (e.g., 0.5 or 1.0)
+% 
+% kp1 = size(values, 1); % degree + 1
+% n = length(w)/(2*kp1);
+% rhs = zeros(size(w));
+% 
+% for e = 1:n
+%     ve = w((e-1)*kp1+1: e*kp1); 
+%     pe = w((e+n-1)*kp1+1: (e+n)*kp1); 
+% 
+%     % interpolate to quadrature points
+%     v_quad = values' * ve;
+%     p_quad = values' * pe;
+% 
+%     % physical terms
+%     rhs((e-1)*kp1+1: e*kp1) = derivatives * (weights .* p_quad);
+%     rhs((e+n-1)*kp1+1: (e+n)*kp1) = derivatives * (weights .* v_quad);
+%     
+%     % LEFT FACE
+%     vminus = ve(1);
+%     pminus = pe(1);
+%     if e == 1
+%         if periodic
+%             vplus = w(kp1*n);
+%             pplus = w(2*kp1*n);
+%         else
+%             pplus = bc(3);  % Dirichlet p
+%             vplus = bc(1);  % Dirichlet v
+%         end
+%     else
+%         vplus = w((e-1)*kp1);
+%         pplus = w((e+n-1)*kp1);
+%     end
+% 
+%     avg_p = 0.5 * (pminus + pplus);
+%     jump_v = vplus - vminus;
+%     flux_v = avg_p - tau * jump_v;
+% 
+%     avg_v = 0.5 * (vminus + vplus);
+%     jump_p = pplus - pminus;
+%     flux_p = avg_v - tau * jump_p;
+% 
+%     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + flux_v;
+%     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + flux_p;
+% 
+%     % RIGHT FACE
+%     vminus = ve(end);
+%     pminus = pe(end);
+%     if e == n
+%         if periodic
+%             vplus = w(1);
+%             pplus = w(kp1*n+1);
+%         else
+%             pplus = bc(4);  % Dirichlet p
+%             vplus = bc(2);  % Dirichlet v
+%         end
+%     else
+%         vplus = w(e*kp1+1);
+%         pplus = w((e+n)*kp1+1);
+%     end
+% 
+%     avg_p = 0.5 * (pminus + pplus);
+%     jump_v = vplus - vminus;
+%     flux_v = avg_p - tau * jump_v;
+% 
+%     avg_v = 0.5 * (vminus + vplus);
+%     jump_p = pplus - pminus;
+%     flux_p = avg_v - tau * jump_p;
+% 
+%     rhs(e*kp1) = rhs(e*kp1) - flux_v;
+%     rhs((e+n)*kp1) = rhs((e+n)*kp1) - flux_p;
+% end
+% end
+
