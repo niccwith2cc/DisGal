@@ -5,7 +5,7 @@
 close all
 clear
 
-n = 20;         % number of elements
+n = 40;         % number of elements
 Tf = 10;        % final time
 bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
 k = 2;          % polynomial degree
@@ -17,6 +17,7 @@ nc = k+1;       % number of quadrature points
 left = 0;       % left end of the domain
 right = 1;      % right end of the domain
 plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
+flux_type = 0;  % choose between Lax-Friedrich (0) or HDG (1)
 
 % analytical solution
 analytical_v = @(x,t)cos(pi*x)*cos(pi*t);
@@ -54,6 +55,8 @@ dt = Tf/NT;
 disp(['Number of elements: ' num2str(n) ', minimum mesh size: ' ...
     num2str(min(h)) ', time step size: ' num2str(dt) ])
 
+
+
 tic;
 % evaluate reference cell polynomials and mass matrix
 [values,derivatives] = evaluate_lagrange_basis(xunit, pg);
@@ -72,13 +75,13 @@ w(:, 1) = w0;
 
 % run time loop
 for m=1:NT
-    k1 = Minv * lax_flux_rhs(w(:, m), c, rho, [analytical_v(0, (m-1)*dt); analytical_v(1, (m-1)*dt); analytical_p(0, (m-1)*dt); analytical_p(1, (m-1)*dt)], values, derivatives, wg, bc);
+    k1 = Minv * evaluate_acoustic_rhs(flux_type, w(:, m), c, rho, [analytical_v(0, (m-1)*dt); analytical_v(1, (m-1)*dt); analytical_p(0, (m-1)*dt); analytical_p(1, (m-1)*dt)], values, derivatives, wg, bc);
 
-    k2 = Minv * lax_flux_rhs(w(:, m) + 0.5*dt*k1, c, rho, [analytical_v(0, (m-0.5)*dt); analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt); analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, bc);
+    k2 = Minv * evaluate_acoustic_rhs(flux_type, w(:, m) + 0.5*dt*k1, c, rho, [analytical_v(0, (m-0.5)*dt); analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt); analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, bc);
                  
-    k3 = Minv * lax_flux_rhs(w(:, m) + 0.5*dt*k2, c, rho, [analytical_v(0, (m-0.5)*dt) ; analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt) ; analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, bc);
+    k3 = Minv * evaluate_acoustic_rhs(flux_type, w(:, m) + 0.5*dt*k2, c, rho, [analytical_v(0, (m-0.5)*dt) ; analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt) ; analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, bc);
 
-    k4 = Minv * lax_flux_rhs(w(:, m) + dt*k3, c, rho, [analytical_v(0, m*dt); analytical_v(1, m*dt); analytical_p(0, m*dt); analytical_p(1, m*dt)], values, derivatives, wg, bc);
+    k4 = Minv * evaluate_acoustic_rhs(flux_type, w(:, m) + dt*k3, c, rho, [analytical_v(0, m*dt); analytical_v(1, m*dt); analytical_p(0, m*dt); analytical_p(1, m*dt)], values, derivatives, wg, bc);
     
     w(:, m+1) = w(:, m) + dt/6*(k1+2*k2+2*k3+k4);
 end
@@ -179,7 +182,15 @@ disp(['Pressure Error in maximum norm ' num2str(linfty_error_p) ' in L2 norm ' n
 
 toc;
 
-% end
+function rhs = evaluate_acoustic_rhs(flux_type, w, c, rho, bv, values, derivatives, weights, bc)
+    switch flux_type
+        case 0 % local Lax-Friedrich flux
+            rhs = lax_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc);
+        
+        case 1 % HDG flux
+            rhs = hdg_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc);
+    end
+end
 
 function rhs = lax_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc)
 % ------------------------------------------------------------------------------------------- %
@@ -223,15 +234,16 @@ for e=1:n
     vminus = ve(1);
     pminus = pe(1);
     if (e==1)
-        if (bc)
-            % Periodic
-            vplus = w(kp1*n); % last value in the velocity
-            pplus = w(2*kp1*n);
-        else
-            % Dirichlet condition, implemented via mirror principle
-%             vplus = 2*bv(1)-vminus;
-            pplus = 2*bv(3)-pminus;
-            vplus = ve(1);
+        switch bc
+            case 0 % Dirichlet condition
+                pplus = 2*bv(3)-pminus;
+                vplus = vminus;
+            case 1 % Neumann
+                vplus = -bv(1)/rho;
+                pplus = pminus;
+            case 2 % Absorbing
+                vplus = -pminus/(rho*c);
+                pplus = pminus;
         end
     else
         vplus = w((e-1)*kp1); % e > 1: w(kp1:(e-1)*kp1)
@@ -246,15 +258,16 @@ for e=1:n
     vminus = ve(kp1);
     pminus = pe(kp1);
     if (e==n)
-        if (bc)
-            % Periodic bc
-            vplus = w(1);
-            pplus = w(kp1*n+1);
-        else
-            % Dirichlet condition, implemented via mirror principle
-%             vplus = 2*bv(2)-vminus;
-            pplus = 2*bv(4)-pminus;
-            vplus = ve(kp1);
+        switch bc
+            case 0 % Dirichlet condition
+                pplus = 2*bv(4)-pminus;
+                vplus = vminus;
+            case 1 % Neumann
+                vplus = bv(2)/rho;
+                pplus = pminus;
+            case 2 % Absorbing
+                vplus = pminus/(rho*c);
+                pplus = pminus;
         end
     else
         vplus = w(e*kp1+1);
@@ -312,6 +325,8 @@ for e = 1:n
     if e == 1
         switch bc
             case 0 % Dirichlet
+                vplus = vminus;
+                pplus = 2*bv(3) - pminus;
                 lambda = pplus;
             case 1 % Neumann check n
                 lambda = -(1/tau) * c * vminus + pminus;
@@ -319,20 +334,26 @@ for e = 1:n
                 lambda = (1 /(tau + 1/c))* (- rho * vminus + tau * pminus);
         end
     else % check n
+        vplus = w((e-1)*kp1); % e > 1: w(kp1:(e-1)*kp1)
+        pplus = w((e+n-1)*kp1); 
         lambda = (rho / (2*tau)) * (vplus - vminus) + 1/2 * (pminus + pplus);
     end
 
-    flux_v_num = lambda * 1/rho;
+    numflux_v = lambda * 1/rho;
     % check n
-    flux_p_num = (vminus + (tau/rho) * (lambda - pminus))*(rho * c^2);
+    numflux_p = (vminus + (tau/rho) * (lambda - pminus))*(rho * c^2);
 
-    rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + flux_v_num;
-    rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + flux_p_num;
+    rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
+    rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
 
     % == RIGHT INTERFACE ==
+    vminus = ve(kp1);
+    pminus = pe(kp1);
     if e == n
         switch bc
             case 0 % Dirichlet
+                vplus = vminus;
+                pplus = 2*bv(4) - pminus;
                 lambda = pplus;
             case 1 % Neumann check n
                 lambda = (1/tau) * c * vminus + pminus;
@@ -340,15 +361,15 @@ for e = 1:n
                 lambda = (1 /(tau + 1/c))* (rho * vminus + tau * pminus);
         end
     else % check n
+        vplus = w(e*kp1+1); % e > 1: w(kp1:(e-1)*kp1)
+        pplus = w((e+n)*kp1+1); 
         lambda = (rho / (2*tau)) * (vminus - vplus) + 1/2 * (pminus + pplus);
     end
 
-    flux_v_num = lambda * 1/rho;
+    numflux_v = lambda * 1/rho;
     % check n
-    flux_p_num = (vminus + (tau/rho) * (pminus - lambda))*(rho * c^2);
-    rhs(e*kp1) = rhs(e*kp1) - flux_v_num;
-    rhs((e+n)*kp1) = rhs((e+n)*kp1) - flux_p_num;
+    numflux_p = (vminus + (tau/rho) * (pminus - lambda))*(rho * c^2);
+    rhs(e*kp1) = rhs(e*kp1) - numflux_v;
+    rhs((e+n)*kp1) = rhs((e+n)*kp1) - numflux_p;
 end
 end
-
-
