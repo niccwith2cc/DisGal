@@ -6,11 +6,11 @@ close all
 clear
 
 n = 20;         % number of elements
-Tf = 2;         % final time
-periodic = 0;   % switch between Dirichlet conditions (0) and periodic (1)
+Tf = 10;        % final time
+bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
 k = 2;          % polynomial degree
-c = 1;         % advection speed
-rho = 1;       % density
+c = 1;          % advection speed
+rho = 1;        % density
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 nc = k+1;       % number of quadrature points
@@ -19,22 +19,16 @@ right = 1;      % right end of the domain
 plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
 
 % analytical solution
-% analytical = @(x,t)sin(4*pi*(x-a*t));
-% analytical = @(x,t)exp(sin(4*pi*(x-a*t)));
-% analytical = @(x,t)(abs(2*mod(x-a*t,1)-1));
-% analytical = @(x,t)(mod(x-a*t,1)>0.5);
 analytical_v = @(x,t)cos(pi*x)*cos(pi*t);
 analytical_p = @(x,t)sin(pi*x)*sin(pi*t);
 
-
 % set quadrature formula and quadrature nodes for integration
-[pg,wg] = get_gauss_quadrature(nc); 
+[pg,wg] = get_gauss_quadrature(nc);
 
 % set the node points for the Lagrange polynomials
 xunit = get_gauss_lobatto_quadrature(k+1);
 
 % start up the simulation
-
 % create mesh y and compute mesh size h
 kp1 = k+1;
 y = zeros(2*n,1);
@@ -78,18 +72,18 @@ w(:, 1) = w0;
 
 % run time loop
 for m=1:NT
-    k1 = Minv * evaluate_acoustic_rhs(w(:, m), c, rho, [analytical_v(0, (m-1)*dt); analytical_v(1, (m-1)*dt); analytical_p(0, (m-1)*dt); analytical_p(1, (m-1)*dt)], values, derivatives, wg, alpha, periodic);
+    k1 = Minv * lax_flux_rhs(w(:, m), c, rho, [analytical_v(0, (m-1)*dt); analytical_v(1, (m-1)*dt); analytical_p(0, (m-1)*dt); analytical_p(1, (m-1)*dt)], values, derivatives, wg, bc);
 
-    k2 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k1, c, rho, [analytical_v(0, (m-0.5)*dt); analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt); analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
+    k2 = Minv * lax_flux_rhs(w(:, m) + 0.5*dt*k1, c, rho, [analytical_v(0, (m-0.5)*dt); analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt); analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, bc);
                  
-    k3 = Minv * evaluate_acoustic_rhs(w(:, m) + 0.5*dt*k2, c, rho, [analytical_v(0, (m-0.5)*dt) ; analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt) ; analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, alpha, periodic);
+    k3 = Minv * lax_flux_rhs(w(:, m) + 0.5*dt*k2, c, rho, [analytical_v(0, (m-0.5)*dt) ; analytical_v(1, (m-0.5)*dt); analytical_p(0, (m-0.5)*dt) ; analytical_p(1, (m-0.5)*dt)], values, derivatives, wg, bc);
 
-    k4 = Minv * evaluate_acoustic_rhs(w(:, m) + dt*k3, c, rho, [analytical_v(0, m*dt); analytical_v(1, m*dt); analytical_p(0, m*dt); analytical_p(1, m*dt)], values, derivatives, wg, alpha, periodic);
+    k4 = Minv * lax_flux_rhs(w(:, m) + dt*k3, c, rho, [analytical_v(0, m*dt); analytical_v(1, m*dt); analytical_p(0, m*dt); analytical_p(1, m*dt)], values, derivatives, wg, bc);
     
     w(:, m+1) = w(:, m) + dt/6*(k1+2*k2+2*k3+k4);
 end
 
-% plot the numerical solution (red), the analytical solution (blue), and
+% plot velocity numerical solution (red), the analytical solution (blue), and
 % the initial condition
 figure(1)
 if plot_accurate == 1
@@ -107,7 +101,7 @@ if plot_accurate == 1
     plot(xx(1,:),vv_0(1,:),'k:',xx(1,:),vv(1,:),'r-',xx(1,:),v_anal(1,:),'b');
     hold on
     plot(xx',vv_0','k:');
-    plot(xx',vv','r-');
+    plot(xx',vv','r*-');
     plot(xx',v_anal','b-');
     hold off
 else
@@ -120,6 +114,8 @@ ylabel('v_h(x)')
 title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
 legend('v_h(x,0)',['v_h(x,' num2str(Tf) ')'],['v(x,' num2str(Tf) ')'])
 
+% plot pressure numerical solution (red), the analytical solution (blue), and
+% the initial condition
 figure(2)
 if plot_accurate == 1
     xx_unit = -1:0.05:1;
@@ -149,27 +145,60 @@ ylabel('p_h(x)')
 title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
 legend('p_h(x,0)',['p_h(x,' num2str(Tf) ')'],['p(x,' num2str(Tf) ')'])
 
-l2error = 0;
-linfty_error = 0;
+% calculate L2 and Linf for velocity
+l2error_v = 0;
+linfty_error_v = 0;
+[pg_err,wg_err] = get_gauss_quadrature(k+3);
+values_err = evaluate_lagrange_basis(xunit, pg_err);
+for e=1:n
+    sol_num = values_err' * w((e-1)*kp1+1:(e)*kp1, end);
+    x_err = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*pg_err);
+    sol_exact = analytical_v(x_err, Tf);
+    l2error_v = l2error_v + h(e)/2 * wg_err' * (sol_num-sol_exact).^2;
+    linfty_error_v = max([linfty_error_v; abs(sol_num-sol_exact)]);
+end
+l2error_v = sqrt(l2error_v);
+
+disp(['Velocity Error in maximum norm ' num2str(linfty_error_v) ' in L2 norm ' num2str(l2error_v)])
+
+% calculate L2 and Linf for pressure
+l2error_p = 0;
+linfty_error_p = 0;
 [pg_err,wg_err] = get_gauss_quadrature(k+3);
 values_err = evaluate_lagrange_basis(xunit, pg_err);
 for e=1:n
     sol_num = values_err' * w((e+n-1)*kp1+1:(e+n)*kp1, end);
     x_err = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*pg_err);
     sol_exact = analytical_p(x_err, Tf);
-    l2error = l2error + h(e)/2 * wg_err' * (sol_num-sol_exact).^2;
-    linfty_error = max([linfty_error; abs(sol_num-sol_exact)]);
+    l2error_p = l2error_p + h(e)/2 * wg_err' * (sol_num-sol_exact).^2;
+    linfty_error_p = max([linfty_error_p; abs(sol_num-sol_exact)]);
 end
-l2error = sqrt(l2error);
+l2error_p = sqrt(l2error_p);
 
-disp(['Error in maximum norm ' num2str(linfty_error) ' in L2 norm ' num2str(l2error)])
+disp(['Pressure Error in maximum norm ' num2str(linfty_error_p) ' in L2 norm ' num2str(l2error_p)])
+
 toc;
 
 % end
 
+function rhs = lax_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc)
+% ------------------------------------------------------------------------------------------- %
+% function to calculate rhs using local Lax-Friedrich flux
+% VARIABLES:
+%   IN:
+% w           : system of equation of w = [v, p] ---- size of 2*n*kp1
+% c           : speed of sound
+% rho         : density of fluid
+% bv          : boundary values with respect to the boundary conditions in the form of [vL; vR; pL; pR]
+% values      : lagrange polynomial values
+% derivatives : lagrange polynomial derivatives
+% weights     : weights of the gauss quadrature
+% bc          : Boundary condition
+% ------------------------------------------------------------------------------------------- %
+%   OUT:
+% rhs: vector of right hand side to be multiplied by Minv
+% ------------------------------------------------------------------------------------------- %
 
-function rhs = evaluate_acoustic_rhs(w, c, rho, bc, values, derivatives, weights, alpha, periodic)
-% disp(['this is velocity bc: ', num2str(bc(1))])
 
 kp1 = size(values, 1); % degree + 1
 n = length(w)/(2*kp1);
@@ -178,14 +207,13 @@ rhs = zeros(size(w));
 for e=1:n
     ve = w((e-1)*kp1+1: e*kp1); % 1 to kp1*n
     pe = w((e+n-1)*kp1+1: (e+n)*kp1); % from kp1*n+1 to 2*kp1*n
-    disp(['size of pe: ', num2str(length(pe))])
 
     % interpolate v to quadrature points
     v_quad = values' * ve;
     p_quad = values' * pe;
-
     flux_v = weights .* p_quad;
     flux_p = weights .* v_quad;
+    
     % compute operator at quadrature points and multiply by gradient of
     % test function
     rhs((e-1)*kp1+1: e*kp1) = derivatives * flux_v;
@@ -195,22 +223,22 @@ for e=1:n
     vminus = ve(1);
     pminus = pe(1);
     if (e==1)
-        if (periodic)
-            % periodic bc
+        if (bc)
+            % Periodic
             vplus = w(kp1*n); % last value in the velocity
             pplus = w(2*kp1*n);
         else
             % Dirichlet condition, implemented via mirror principle
-%             vplus = 2*bc(1)-vminus;
-            pplus = 2*bc(3)-pminus;
-            vplus = -ve(1);
+%             vplus = 2*bv(1)-vminus;
+            pplus = 2*bv(3)-pminus;
+            vplus = ve(1);
         end
     else
         vplus = w((e-1)*kp1); % e > 1: w(kp1:(e-1)*kp1)
         pplus = w((e+n-1)*kp1); 
     end
-    numflux_v = 1/2*c*rho^2 * (vminus + vplus) + 1/2 * abs(c) * (pminus - pplus);
-    numflux_p = 1/(2*rho) * (pminus + pplus) + 1/2 * abs(c) * (vminus - vplus);
+    numflux_v = 1/(2*rho) * (pminus + pplus) + 1/2 * abs(c) * (vplus - vminus);
+    numflux_p = 1/2*c^2*rho * (vminus + vplus) + 1/2 * abs(c) * (pplus - pminus);
     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
     
@@ -218,105 +246,109 @@ for e=1:n
     vminus = ve(kp1);
     pminus = pe(kp1);
     if (e==n)
-        if (periodic)
-            % periodic bc
+        if (bc)
+            % Periodic bc
             vplus = w(1);
             pplus = w(kp1*n+1);
         else
             % Dirichlet condition, implemented via mirror principle
-%             vplus = 2*bc(2)-vminus;
-            pplus = 2*bc(4)-pminus;
-            vplus = -ve(end);
+%             vplus = 2*bv(2)-vminus;
+            pplus = 2*bv(4)-pminus;
+            vplus = ve(kp1);
         end
     else
         vplus = w(e*kp1+1);
         pplus = w((e+n)*kp1+1);
     end
-    numflux_v = 1/2*c*rho^2 * (vminus + vplus) + 1/2 * abs(c)*(pplus - pminus);
-    numflux_p = 1/(2*rho) * (pminus + pplus) + 1/2 * abs(c)*(vplus - vminus);
+    numflux_v  = 1/(2*rho) * (pminus + pplus) + 1/2 * abs(c)*(vminus - vplus);
+    numflux_p = 1/2*c^2*rho * (vminus + vplus) + 1/2 * abs(c)*(pminus - pplus);
     rhs(e*kp1) = rhs(e*kp1) - numflux_v;
     rhs((e+n)*kp1) = rhs((e+n)*kp1) - numflux_p;
 end
 
 end
 
-% function rhs = evaluate_acoustic_rhs_hdg(w, c, rho, bc, values, derivatives, weights, tau, periodic)
-% % HDG flux implementation for 1D acoustic wave equation
-% % Inputs:
-% %   w        - full solution vector: [v; p]
-% %   c, rho   - physical constants
-% %   bc       - [vL, vR, pL, pR] Dirichlet boundary values
-% %   tau      - stabilization parameter (e.g., 0.5 or 1.0)
-% 
-% kp1 = size(values, 1); % degree + 1
-% n = length(w)/(2*kp1);
-% rhs = zeros(size(w));
-% 
-% for e = 1:n
-%     ve = w((e-1)*kp1+1: e*kp1); 
-%     pe = w((e+n-1)*kp1+1: (e+n)*kp1); 
-% 
-%     % interpolate to quadrature points
-%     v_quad = values' * ve;
-%     p_quad = values' * pe;
-% 
-%     % physical terms
-%     rhs((e-1)*kp1+1: e*kp1) = derivatives * (weights .* p_quad);
-%     rhs((e+n-1)*kp1+1: (e+n)*kp1) = derivatives * (weights .* v_quad);
-%     
-%     % LEFT FACE
-%     vminus = ve(1);
-%     pminus = pe(1);
-%     if e == 1
-%         if periodic
-%             vplus = w(kp1*n);
-%             pplus = w(2*kp1*n);
-%         else
-%             pplus = bc(3);  % Dirichlet p
-%             vplus = bc(1);  % Dirichlet v
-%         end
-%     else
-%         vplus = w((e-1)*kp1);
-%         pplus = w((e+n-1)*kp1);
-%     end
-% 
-%     avg_p = 0.5 * (pminus + pplus);
-%     jump_v = vplus - vminus;
-%     flux_v = avg_p - tau * jump_v;
-% 
-%     avg_v = 0.5 * (vminus + vplus);
-%     jump_p = pplus - pminus;
-%     flux_p = avg_v - tau * jump_p;
-% 
-%     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + flux_v;
-%     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + flux_p;
-% 
-%     % RIGHT FACE
-%     vminus = ve(end);
-%     pminus = pe(end);
-%     if e == n
-%         if periodic
-%             vplus = w(1);
-%             pplus = w(kp1*n+1);
-%         else
-%             pplus = bc(4);  % Dirichlet p
-%             vplus = bc(2);  % Dirichlet v
-%         end
-%     else
-%         vplus = w(e*kp1+1);
-%         pplus = w((e+n)*kp1+1);
-%     end
-% 
-%     avg_p = 0.5 * (pminus + pplus);
-%     jump_v = vplus - vminus;
-%     flux_v = avg_p - tau * jump_v;
-% 
-%     avg_v = 0.5 * (vminus + vplus);
-%     jump_p = pplus - pminus;
-%     flux_p = avg_v - tau * jump_p;
-% 
-%     rhs(e*kp1) = rhs(e*kp1) - flux_v;
-%     rhs((e+n)*kp1) = rhs((e+n)*kp1) - flux_p;
-% end
-% end
+function rhs = hdg_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc)
+% ------------------------------------------------------------------------------------------- %
+% function to calculate rhs using HDG flux
+% VARIABLES:
+%   IN:
+% w           : system of equation of w = [v, p] ---- size of 2*n*kp1
+% c           : speed of sound
+% rho         : density of fluid
+% bv          : boundary values with respect to the boundary conditions in the form of [vL; vR; pL; pR]
+% values      : lagrange polynomial values
+% derivatives : lagrange polynomial derivatives
+% weights     : weights of the gauss quadrature
+% bc          : Boundary condition
+% ------------------------------------------------------------------------------------------- %
+%   OUT:
+% rhs: vector of right hand side to be multiplied by Minv
+% ------------------------------------------------------------------------------------------- %
+
+kp1 = size(values, 1); % degree + 1
+n = length(w)/(2*kp1);
+rhs = zeros(size(w));
+
+% stabilization parameters
+tau = 1/c;
+
+for e = 1:n
+    ve = w((e-1)*kp1+1:e*kp1);
+    pe = w((e+n-1)*kp1+1:(e+n)*kp1);
+
+    % Evaluate at quadrature
+    v_quad = values' * ve;
+    p_quad = values' * pe;
+    flux_v = weights .* p_quad;
+    flux_p = weights .* v_quad;
+
+    rhs((e-1)*kp1+1:e*kp1) = derivatives * flux_v;
+    rhs((e+n-1)*kp1+1:(e+n)*kp1) = derivatives * flux_p;
+
+    % == LEFT INTERFACE ==
+    vminus = ve(1);
+    pminus = pe(1);
+    if e == 1
+        switch bc
+            case 0 % Dirichlet
+                lambda = pplus;
+            case 1 % Neumann check n
+                lambda = -(1/tau) * c * vminus + pminus;
+            case 2 % Absorbing check n
+                lambda = (1 /(tau + 1/c))* (- rho * vminus + tau * pminus);
+        end
+    else % check n
+        lambda = (rho / (2*tau)) * (vplus - vminus) + 1/2 * (pminus + pplus);
+    end
+
+    flux_v_num = lambda * 1/rho;
+    % check n
+    flux_p_num = (vminus + (tau/rho) * (lambda - pminus))*(rho * c^2);
+
+    rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + flux_v_num;
+    rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + flux_p_num;
+
+    % == RIGHT INTERFACE ==
+    if e == n
+        switch bc
+            case 0 % Dirichlet
+                lambda = pplus;
+            case 1 % Neumann check n
+                lambda = (1/tau) * c * vminus + pminus;
+            case 2 % Absorbing check n
+                lambda = (1 /(tau + 1/c))* (rho * vminus + tau * pminus);
+        end
+    else % check n
+        lambda = (rho / (2*tau)) * (vminus - vplus) + 1/2 * (pminus + pplus);
+    end
+
+    flux_v_num = lambda * 1/rho;
+    % check n
+    flux_p_num = (vminus + (tau/rho) * (pminus - lambda))*(rho * c^2);
+    rhs(e*kp1) = rhs(e*kp1) - flux_v_num;
+    rhs((e+n)*kp1) = rhs((e+n)*kp1) - flux_p_num;
+end
+end
+
 
