@@ -1,6 +1,6 @@
 close all
 clear
-Courant = 0.4:0.01:2;
+Courant = 0.4:0.01:1.65;
 flux_type = [0, 1];
 
 L2_v = zeros(2, length(Courant));
@@ -8,7 +8,7 @@ L2_p = zeros(2, length(Courant));
 
 for i = 1:length(flux_type)
     for j = 1:length(Courant)
-        disp(['using Cr: ', num2str(Courant(j)), ' flux type', num2str(flux_type(i))] );
+        disp(['using Cr: ', num2str(Courant(j))] );
         [L2_v(i, j) , L2_p(i, j)] = acoustic_solver_integrate(Courant(j), flux_type(i)); 
     end
 end
@@ -281,8 +281,8 @@ for e=1:n
     
     % compute operator at quadrature points and multiply by gradient of
     % test function
-    rhs((e-1)*kp1+1: e*kp1) = derivatives * flux_v;
-    rhs((e+n-1)*kp1+1: (e+n)*kp1) = derivatives * flux_p;
+    rhs((e-1)*kp1+1: e*kp1) = derivatives * flux_v / rho;
+    rhs((e+n-1)*kp1+1: (e+n)*kp1) = derivatives * flux_p * rho * c^2;
     
     % compute acoustic numerical flux on the left
     vminus = ve(1);
@@ -370,8 +370,8 @@ for e = 1:n
     flux_v = weights .* p_quad;
     flux_p = weights .* v_quad;
 
-    rhs((e-1)*kp1+1:e*kp1) = derivatives * flux_v;
-    rhs((e+n-1)*kp1+1:(e+n)*kp1) = derivatives * flux_p;
+    rhs((e-1)*kp1+1:e*kp1) = derivatives * flux_v/rho;
+    rhs((e+n-1)*kp1+1:(e+n)*kp1) = derivatives * flux_p*rho*c^2;
 
     % == LEFT INTERFACE ==
     vminus = ve(1);
@@ -394,15 +394,15 @@ for e = 1:n
         lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);
     end
 
-    numflux_v = lambda;
+    numflux_v = lambda/rho;
     % check n
-    numflux_p = vminus + (tau/rho) * norm * (pminus - lambda);
+    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda))*rho*c^2;
 
     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
 
     % == RIGHT INTERFACE ==
-    vminus = ve(kp1);
+    vminus = ve(kp1); 
     pminus = pe(kp1);
     norm = +1;
     if e == n
@@ -422,9 +422,9 @@ for e = 1:n
         lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);
     end
 
-    numflux_v = lambda;
+    numflux_v = lambda/rho;
     % check n
-    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda));
+    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda))*rho*c^2;
     rhs(e*kp1) = rhs(e*kp1) - numflux_v;
     rhs((e+n)*kp1) = rhs((e+n)*kp1) - numflux_p;
 end

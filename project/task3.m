@@ -5,10 +5,10 @@
 close all
 clear
 
-n = 40;         % number of elements
+n = 20;         % number of elements
 Tf = 3e-3;      % final time
-bc = 2;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
-k = 3;          % polynomial degree
+bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
+k = 2;          % polynomial degree
 c = 340;        % advection speed
 rho = 1.2;      % density
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
@@ -21,7 +21,7 @@ flux_type = 1;  % choose between Lax-Friedrich (0) or HDG (1)
 
 % analytical solution
 analytical_v = @(x,t)zeros(size(x));
-analytical_p = @(x,t)exp( -(x-0.5).^2/(0.02^2) );
+analytical_p = @(x,t)exp(-((x - 0.5).^2) / 0.02^2);
 
 % set quadrature formula and quadrature nodes for integration
 [pg,wg] = get_gauss_quadrature(nc);
@@ -100,68 +100,6 @@ for m=1:NT
     w(:, m+1) = w(:, m) + dt/6*(k1+2*k2+2*k3+k4);
 end
 
-% plot velocity numerical solution (red), the analytical solution (blue), and
-% the initial condition
-figure(1)
-if plot_accurate == 1
-    xx_unit = -1:0.05:1;
-    xx = zeros(n,length(xx_unit));
-    vv_0 = zeros(size(xx));
-    vv = zeros(size(xx));
-    val = evaluate_lagrange_basis(xunit, xx_unit);
-    for e=1:n
-        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
-        vv_0(e, :) = val' * w(e*kp1-k:e*kp1, 1);
-        vv(e, :) = val' * w(e*kp1-k:e*kp1, end);
-    end
-    v_anal = analytical_v(xx, Tf);
-    plot(xx(1,:),vv_0(1,:),'k:',xx(1,:),vv(1,:),'r-',xx(1,:),v_anal(1,:),'b');
-    hold on
-    plot(xx',vv_0','k:');
-    plot(xx',vv','r*-');
-    plot(xx',v_anal','b-');
-    hold off
-else
-    v_s = w(e*kp1-k:e*kp1, 1);
-    v_f = w(e*kp1-k:e*kp1, end);
-    plot(x,v_s,'k:', x, v_f,'r-', x, analytical_v(x, Tf),'b')
-end
-xlabel('x')
-ylabel('v_h(x)')
-title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
-legend('v_h(x,0)',['v_h(x,' num2str(Tf) ')'],['v(x,' num2str(Tf) ')'])
-
-% plot pressure numerical solution (red), the analytical solution (blue), and
-% the initial condition
-figure(2)
-if plot_accurate == 1
-    xx_unit = -1:0.05:1;
-    xx = zeros(n,length(xx_unit));
-    pp_0 = zeros(size(xx));
-    pp = zeros(size(xx));
-    val = evaluate_lagrange_basis(xunit, xx_unit);
-    for e=1:n
-        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
-        pp_0(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, 1);
-        pp(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, end);
-    end  
-    p_anal = analytical_p(xx, Tf);
-    plot(xx(1,:),pp_0(1,:),'k:',xx(1,:),pp(1,:),'r-',xx(1,:),p_anal(1,:),'b');
-    hold on
-    plot(xx',pp_0','k:');
-    plot(xx',pp','r-');
-    plot(xx',p_anal','b-');
-    hold off
-else
-    p_s = w((e+n)*kp1-k: (e+n)*kp1, 1);
-    p_f = w((e+n)*kp1-l: (e+n)*kp1, end);
-    plot(x,p_s,'k:', x, p_f,'r-', x, analytical_p(x, Tf),'b')
-end
-xlabel('x')
-ylabel('p_h(x)')
-title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
-legend('p_h(x,0)',['p_h(x,' num2str(Tf) ')'],['p(x,' num2str(Tf) ')'])
-
 % calculate L2 and Linf for velocity
 l2error_v = 0;
 linfty_error_v = 0;
@@ -202,9 +140,45 @@ NT_plot = round(Tf/dt_plot);
 t_plot = 0:dt_plot:Tf;
 index_t = round((t_plot/Tf)*NT) + 1;
 
-figure(3);
+figure;
 xx_unit = -1:0.05:1;
-xx = zeros(n,length(xx_unit));
+xx = zeros(n, length(xx_unit));
+vvv = zeros(size(xx, 1), size(xx, 2), NT_plot+1); % creates a 3D matrix of size(xx), size(xx), NT_plot+1
+val = evaluate_lagrange_basis(xunit, xx_unit);
+for e=1:n
+    xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
+    vvv(e, :, 1) = val' * w((e)*kp1-k: (e)*kp1, index_t(1));
+    vvv(e, :, 2) = val' * w((e)*kp1-k: (e)*kp1, index_t(2));
+    vvv(e, :, 3) = val' * w((e)*kp1-k: (e)*kp1, index_t(3));
+    vvv(e, :, 4) = val' * w((e)*kp1-k: (e)*kp1, index_t(4));
+    vvv(e, :, 5) = val' * w((e)*kp1-k: (e)*kp1, index_t(5));
+    vvv(e, :, 6) = val' * w((e)*kp1-k: (e)*kp1, index_t(6));
+end
+
+v_anal = zeros(size(xx, 1), size(xx, 2), NT_plot+1);
+for i = 1:(NT_plot+1)
+    v_anal(:,:,i) = analytical_v(xx, t_plot(i));
+end
+
+for i = 1:6
+    subplot(2, 3, i);
+    plot(xx(1,:), vvv(1, :, i),'r-', xx(1,:), v_anal(1, :, i),'b');
+    title(['Subplot ', num2str(i)]);
+    hold on
+    plot(xx',vvv(:,:,i)','r-', 'LineWidth', 1.3);
+    plot(xx',v_anal(:,:,i)','b-');
+    hold off
+    xlabel('x')
+    ylabel('v_h(x)')
+    title(['t = ' num2str(t_plot(i))])
+    legend(['v_h(x, ' num2str(t_plot(i)) ')'], 'v(x, 0)')
+end
+
+sgtitle(['Velocity evolution with ' flux_name ', BC = ' bc_name ', degree = ' num2str(k) ', elements = ' num2str(n)]);
+
+figure;
+xx_unit = -1:0.05:1;
+xx = zeros(n, length(xx_unit));
 ppp = zeros(size(xx, 1), size(xx, 2), NT_plot+1); % creates a 3D matrix of size(xx), size(xx), NT_plot+1
 val = evaluate_lagrange_basis(xunit, xx_unit);
 for e=1:n
@@ -216,12 +190,6 @@ for e=1:n
     ppp(e, :, 5) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(5));
     ppp(e, :, 6) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(6));
 end
-p_anal_0 = analytical_p(xx, t_plot(1));
-p_anal_1 = analytical_p(xx, t_plot(2));
-p_anal_2 = analytical_p(xx, t_plot(3));
-p_anal_3 = analytical_p(xx, t_plot(4));
-p_anal_4 = analytical_p(xx, t_plot(5));
-p_anal_5 = analytical_p(xx, t_plot(6));
 
 p_anal = zeros(size(xx, 1), size(xx, 2), NT_plot+1);
 for i = 1:(NT_plot+1)
@@ -233,15 +201,16 @@ for i = 1:6
     plot(xx(1,:), ppp(1, :, i),'r-', xx(1,:), p_anal(1, :, i),'b');
     title(['Subplot ', num2str(i)]);
     hold on
-    plot(xx',ppp(:,:,i)','r-');
+    plot(xx',ppp(:,:,i)','r-', 'LineWidth', 1.3);
     plot(xx',p_anal(:,:,i)','b-');
     hold off
     xlabel('x')
     ylabel('p_h(x)')
-    title(['degree=' num2str(k) ', n=' num2str(n) ' elements, t = ' num2str(t_plot(i))])
-    legend(['p_h(x, ' num2str(t_plot(i)) ')'], ['p(x,' num2str(t_plot(i)) ')'])
+    title(['t = ' num2str(t_plot(i))])
+    legend(['p_h(x, ' num2str(t_plot(i)) ')'], 'p(x, 0)')
 end
 
+sgtitle(['Pressure evolution with ' flux_name ', BC = ' bc_name ', degree = ' num2str(k) ', elements = ' num2str(n)]);
 
 function rhs = evaluate_acoustic_rhs(flux_type, w, c, rho, bv, values, derivatives, weights, bc)
     switch flux_type
@@ -270,6 +239,7 @@ function rhs = lax_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc)
 %   OUT:
 % rhs: vector of right hand side to be multiplied by Minv
 % ------------------------------------------------------------------------------------------- %
+
 kp1 = size(values, 1); % degree + 1
 n = length(w)/(2*kp1);
 rhs = zeros(size(w));
@@ -286,8 +256,8 @@ for e=1:n
     
     % compute operator at quadrature points and multiply by gradient of
     % test function
-    rhs((e-1)*kp1+1: e*kp1) = derivatives * flux_v;
-    rhs((e+n-1)*kp1+1: (e+n)*kp1) = derivatives * flux_p;
+    rhs((e-1)*kp1+1: e*kp1) = derivatives * flux_v / rho;
+    rhs((e+n-1)*kp1+1: (e+n)*kp1) = derivatives * flux_p * rho * c^2;
     
     % compute acoustic numerical flux on the left
     vminus = ve(1);
@@ -375,8 +345,8 @@ for e = 1:n
     flux_v = weights .* p_quad;
     flux_p = weights .* v_quad;
 
-    rhs((e-1)*kp1+1:e*kp1) = derivatives * flux_v;
-    rhs((e+n-1)*kp1+1:(e+n)*kp1) = derivatives * flux_p;
+    rhs((e-1)*kp1+1:e*kp1) = derivatives * flux_v/rho;
+    rhs((e+n-1)*kp1+1:(e+n)*kp1) = derivatives * flux_p*rho*c^2;
 
     % == LEFT INTERFACE ==
     vminus = ve(1);
@@ -399,9 +369,9 @@ for e = 1:n
         lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);
     end
 
-    numflux_v = lambda;
+    numflux_v = lambda/rho;
     % check n
-    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda));
+    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda))*rho*c^2;
 
     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
@@ -427,9 +397,9 @@ for e = 1:n
         lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);
     end
 
-    numflux_v = lambda;
+    numflux_v = lambda/rho;
     % check n
-    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda));
+    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda))*rho*c^2;
     rhs(e*kp1) = rhs(e*kp1) - numflux_v;
     rhs((e+n)*kp1) = rhs((e+n)*kp1) - numflux_p;
 end

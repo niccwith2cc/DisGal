@@ -1,14 +1,44 @@
-% function acoustic_solver_integrate
-% 1D acoustic solver based on pointwise evaluation of fluxes and using
-% integrals for the element advection term
-% Assumption: Nodal polynomials with node points at interval end points
 close all
 clear
 
-n = 80;         % number of elements
+n = [5, 10, 20, 40, 80];
+k = [1, 2, 3, 4];
+flux_type = [0, 1];
+
+soft_purple = [0.6, 0.4, 0.8];
+dusty_pink = [0.9, 0.6, 0.7];
+muted_green = [0.4, 0.7, 0.6];
+warm_red = [0.8, 0.4, 0.4];
+soft_blue = [0.4, 0.6, 0.8];
+
+L2_pressure = zeros(length(k), length(n));
+
+for i = 1:length(k)
+    for j = 1:length(n)
+        L2_pressure(i, j) = acoustic_solver_integrate(k(i), n(j));
+    end
+end
+
+% plotting
+marker = ['.-', 'x-', '^-', 's-'];
+color = [soft_blue, warm_red, muted_green, soft_purple];
+figure;
+for i = 1:length(k)
+    semilogy(n, L2_pressure(i, :), marker(i), 'Color', color(i), 'MarkerFaceColor', color(i), 'DisplayName', num2str(k(i)))
+    hold on;
+end
+hold off
+xlabel('Number of elements n')
+ylabel('L_2 Pressure Error')
+title('Lax Flux Convergence of L_2 Pressure Error')
+
+function L2_pressure = acoustic_solver_integrate(k, n)
+% 1D acoustic solver based on pointwise evaluation of fluxes and using
+% integrals for the element advection term
+% Assumption: Nodal polynomials with node points at interval end points
+
 Tf = 10;        % final time
 bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
-k = 2;          % polynomial degree
 c = 1;          % advection speed
 rho = 1;        % density
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
@@ -193,10 +223,12 @@ for e=1:n
     linfty_error_p = max([linfty_error_p; abs(sol_num-sol_exact)]);
 end
 l2error_p = sqrt(l2error_p);
+L2_pressure = l2error_p;
 
 disp(['Pressure Error in maximum norm ' num2str(linfty_error_p) ' in L2 norm ' num2str(l2error_p)])
 
 toc;
+end
 
 function rhs = evaluate_acoustic_rhs(flux_type, w, c, rho, bv, values, derivatives, weights, bc)
     switch flux_type
