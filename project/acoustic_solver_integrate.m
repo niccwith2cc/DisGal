@@ -5,7 +5,7 @@
 close all
 clear
 
-n = 40;         % number of elements
+n = 10;         % number of elements
 Tf = 10;        % final time
 bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
 k = 3;          % polynomial degree
@@ -337,26 +337,27 @@ for e = 1:n
     % == LEFT INTERFACE ==
     vminus = ve(1);
     pminus = pe(1);
+    norm = -1;
     if e == 1
         switch bc
             case 0 % Dirichlet
-                vplus = vminus;
-                pplus = 2*bv(3) - pminus;
+                pplus = bv(3);
                 lambda = pplus;
             case 1 % Neumann check n
-                lambda = -(1/tau) * rho * vminus + pminus;
+                lambda = (1/tau) * rho * vminus * norm + pminus;
             case 2 % Absorbing check n
-                lambda = (1 /(tau + 1/c))* (- rho * vminus + tau * pminus);
+                lambda = (1 /(tau + 1/c))* (rho * vminus * norm + tau * pminus);
         end
-    else % check n
+    else 
         vplus = w((e-1)*kp1); % e > 1: w(kp1:(e-1)*kp1)
-        pplus = w((e+n-1)*kp1); 
-        lambda = (rho / (2*tau)) * (vplus - vminus) + 1/2 * (pminus + pplus);
+        pplus = w((e+n-1)*kp1);
+        % check n
+        lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);
     end
 
     numflux_v = lambda;
     % check n
-    numflux_p = (vminus + (tau/rho) * (lambda - pminus));
+    numflux_p = vminus + (tau/rho) * norm * (pminus - lambda);
 
     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
@@ -364,26 +365,27 @@ for e = 1:n
     % == RIGHT INTERFACE ==
     vminus = ve(kp1);
     pminus = pe(kp1);
+    norm = +1;
     if e == n
         switch bc
             case 0 % Dirichlet
-                vplus = vminus;
-                pplus = 2*bv(4) - pminus;
+                pplus = bv(4);
                 lambda = pplus;
             case 1 % Neumann check n
-                lambda = (1/tau) * rho * vminus + pminus;
+                lambda = (1/tau) * rho * vminus * norm + pminus;
             case 2 % Absorbing check n
-                lambda = (1 /(tau + 1/c))* (rho * vminus + tau * pminus);
+                lambda = (1 /(tau + 1/c)) * (rho * vminus * norm + tau * pminus);
         end
-    else % check n
+    else
         vplus = w(e*kp1+1); % e > 1: w(kp1:(e-1)*kp1)
         pplus = w((e+n)*kp1+1); 
-        lambda = (rho / (2*tau)) * (vminus - vplus) + 1/2 * (pminus + pplus);
+        % check n
+        lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);
     end
 
     numflux_v = lambda;
     % check n
-    numflux_p = (vminus + (tau/rho) * (pminus - lambda));
+    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda));
     rhs(e*kp1) = rhs(e*kp1) - numflux_v;
     rhs((e+n)*kp1) = rhs((e+n)*kp1) - numflux_p;
 end

@@ -1,27 +1,63 @@
-% function acoustic_solver_integrate
+close all
+clear
+Courant = 0.4:0.01:2;
+flux_type = [0, 1];
+
+L2_v = zeros(2, length(Courant));
+L2_p = zeros(2, length(Courant));
+
+for i = 1:length(flux_type)
+    for j = 1:length(Courant)
+        disp(['using Cr: ', num2str(Courant(j)), ' flux type', num2str(flux_type(i))] );
+        [L2_v(i, j) , L2_p(i, j)] = acoustic_solver_integrate(Courant(j), flux_type(i)); 
+    end
+end
+
+figure(1)
+semilogy(Courant, L2_p(1, :), 'r-s', 'LineWidth', 2, 'MarkerFaceColor', 'r', 'DisplayName', 'Lax Pressure')
+hold on
+semilogy(Courant, L2_p(2, :), 'b*-', 'LineWidth', 2, 'MarkerFaceColor', 'b', 'DisplayName', 'HDG Pressure')
+xlabel('Courant number (Cr)')
+ylabel('L_2 Pressure error')
+title('Change of L_2 Pressure Error vs. Courant Number');
+xlim([0.4, max(Courant)]);  
+ylim([1e-13, 1e+4]);
+hold off;
+
+figure(2)
+semilogy(Courant, L2_v(1, :), 'r-s', 'LineWidth', 2, 'MarkerFaceColor', 'r', 'DisplayName', 'Lax Velocity')
+hold on
+semilogy(Courant, L2_v(2, :), 'b*-', 'LineWidth', 2, 'MarkerFaceColor', 'b', 'DisplayName', 'HDG Velocity')
+xlabel('Courant number (Cr)')
+ylabel('L_2 Velocity error')
+title('Change of L_2 Velocity Error vs. Courant Number');
+xlim([0.4, max(Courant)]);  
+ylim([1e-13, 1e+4]);
+hold off;
+
+
+function [l2_error_v, l2_error_p] = acoustic_solver_integrate(Courant, flux_type)
 % 1D acoustic solver based on pointwise evaluation of fluxes and using
 % integrals for the element advection term
 % Assumption: Nodal polynomials with node points at interval end points
-close all
-clear
 
-n = 40;         % number of elements
-Tf = 3e-3;      % final time
-bc = 2;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
-k = 3;          % polynomial degree
-c = 340;        % advection speed
-rho = 1.2;      % density
-Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
+n = 80;         % number of elements
+Tf = 2;        % final time
+bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
+k = 4;          % polynomial degree
+c = 1;          % advection speed
+rho = 1;        % density
+Cr = Courant/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 nc = k+1;       % number of quadrature points
 left = 0;       % left end of the domain
 right = 1;      % right end of the domain
 plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
-flux_type = 1;  % choose between Lax-Friedrich (0) or HDG (1)
+% flux_type = 0;  % choose between Lax-Friedrich (0) or HDG (1)
 
 % analytical solution
-analytical_v = @(x,t)zeros(size(x));
-analytical_p = @(x,t)exp( -(x-0.5).^2/(0.02^2) );
+analytical_v = @(x,t)cos(pi*x)*cos(pi*t);
+analytical_p = @(x,t)sin(pi*x)*sin(pi*t);
 
 % set quadrature formula and quadrature nodes for integration
 [pg,wg] = get_gauss_quadrature(nc);
@@ -61,6 +97,7 @@ switch flux_type
     case 1
         flux_name = 'HDG';
 end
+
 switch bc
     case 0
         bc_name = 'Dirichlet';
@@ -69,6 +106,7 @@ switch bc
     case 2
         bc_name = 'Absorbing';
 end
+
 disp(['Flux used: ', flux_name, ' with ', bc_name, ' BC']);
 
 tic;
@@ -102,65 +140,65 @@ end
 
 % plot velocity numerical solution (red), the analytical solution (blue), and
 % the initial condition
-figure(1)
-if plot_accurate == 1
-    xx_unit = -1:0.05:1;
-    xx = zeros(n,length(xx_unit));
-    vv_0 = zeros(size(xx));
-    vv = zeros(size(xx));
-    val = evaluate_lagrange_basis(xunit, xx_unit);
-    for e=1:n
-        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
-        vv_0(e, :) = val' * w(e*kp1-k:e*kp1, 1);
-        vv(e, :) = val' * w(e*kp1-k:e*kp1, end);
-    end
-    v_anal = analytical_v(xx, Tf);
-    plot(xx(1,:),vv_0(1,:),'k:',xx(1,:),vv(1,:),'r-',xx(1,:),v_anal(1,:),'b');
-    hold on
-    plot(xx',vv_0','k:');
-    plot(xx',vv','r*-');
-    plot(xx',v_anal','b-');
-    hold off
-else
-    v_s = w(e*kp1-k:e*kp1, 1);
-    v_f = w(e*kp1-k:e*kp1, end);
-    plot(x,v_s,'k:', x, v_f,'r-', x, analytical_v(x, Tf),'b')
-end
-xlabel('x')
-ylabel('v_h(x)')
-title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
-legend('v_h(x,0)',['v_h(x,' num2str(Tf) ')'],['v(x,' num2str(Tf) ')'])
-
-% plot pressure numerical solution (red), the analytical solution (blue), and
-% the initial condition
-figure(2)
-if plot_accurate == 1
-    xx_unit = -1:0.05:1;
-    xx = zeros(n,length(xx_unit));
-    pp_0 = zeros(size(xx));
-    pp = zeros(size(xx));
-    val = evaluate_lagrange_basis(xunit, xx_unit);
-    for e=1:n
-        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
-        pp_0(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, 1);
-        pp(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, end);
-    end  
-    p_anal = analytical_p(xx, Tf);
-    plot(xx(1,:),pp_0(1,:),'k:',xx(1,:),pp(1,:),'r-',xx(1,:),p_anal(1,:),'b');
-    hold on
-    plot(xx',pp_0','k:');
-    plot(xx',pp','r-');
-    plot(xx',p_anal','b-');
-    hold off
-else
-    p_s = w((e+n)*kp1-k: (e+n)*kp1, 1);
-    p_f = w((e+n)*kp1-l: (e+n)*kp1, end);
-    plot(x,p_s,'k:', x, p_f,'r-', x, analytical_p(x, Tf),'b')
-end
-xlabel('x')
-ylabel('p_h(x)')
-title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
-legend('p_h(x,0)',['p_h(x,' num2str(Tf) ')'],['p(x,' num2str(Tf) ')'])
+% figure(1)
+% if plot_accurate == 1
+%     xx_unit = -1:0.05:1;
+%     xx = zeros(n,length(xx_unit));
+%     vv_0 = zeros(size(xx));
+%     vv = zeros(size(xx));
+%     val = evaluate_lagrange_basis(xunit, xx_unit);
+%     for e=1:n
+%         xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
+%         vv_0(e, :) = val' * w(e*kp1-k:e*kp1, 1);
+%         vv(e, :) = val' * w(e*kp1-k:e*kp1, end);
+%     end
+%     v_anal = analytical_v(xx, Tf);
+%     plot(xx(1,:),vv_0(1,:),'k:',xx(1,:),vv(1,:),'r-',xx(1,:),v_anal(1,:),'b');
+%     hold on
+%     plot(xx',vv_0','k:');
+%     plot(xx',vv','r*-');
+%     plot(xx',v_anal','b-');
+%     hold off
+% else
+%     v_s = w(e*kp1-k:e*kp1, 1);
+%     v_f = w(e*kp1-k:e*kp1, end);
+%     plot(x,v_s,'k:', x, v_f,'r-', x, analytical_v(x, Tf),'b')
+% end
+% xlabel('x')
+% ylabel('v_h(x)')
+% title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
+% legend('v_h(x,0)',['v_h(x,' num2str(Tf) ')'],['v(x,' num2str(Tf) ')'])
+% 
+% % plot pressure numerical solution (red), the analytical solution (blue), and
+% % the initial condition
+% figure(2)
+% if plot_accurate == 1
+%     xx_unit = -1:0.05:1;
+%     xx = zeros(n,length(xx_unit));
+%     pp_0 = zeros(size(xx));
+%     pp = zeros(size(xx));
+%     val = evaluate_lagrange_basis(xunit, xx_unit);
+%     for e=1:n
+%         xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
+%         pp_0(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, 1);
+%         pp(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, end);
+%     end  
+%     p_anal = analytical_p(xx, Tf);
+%     plot(xx(1,:),pp_0(1,:),'k:',xx(1,:),pp(1,:),'r-',xx(1,:),p_anal(1,:),'b');
+%     hold on
+%     plot(xx',pp_0','k:');
+%     plot(xx',pp','r-');
+%     plot(xx',p_anal','b-');
+%     hold off
+% else
+%     p_s = w((e+n)*kp1-k: (e+n)*kp1, 1);
+%     p_f = w((e+n)*kp1-l: (e+n)*kp1, end);
+%     plot(x,p_s,'k:', x, p_f,'r-', x, analytical_p(x, Tf),'b')
+% end
+% xlabel('x')
+% ylabel('p_h(x)')
+% title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
+% legend('p_h(x,0)',['p_h(x,' num2str(Tf) ')'],['p(x,' num2str(Tf) ')'])
 
 % calculate L2 and Linf for velocity
 l2error_v = 0;
@@ -175,6 +213,7 @@ for e=1:n
     linfty_error_v = max([linfty_error_v; abs(sol_num-sol_exact)]);
 end
 l2error_v = sqrt(l2error_v);
+l2_error_v = l2error_v;
 
 disp(['Velocity Error in maximum norm ' num2str(linfty_error_v) ' in L2 norm ' num2str(l2error_v)])
 
@@ -191,57 +230,12 @@ for e=1:n
     linfty_error_p = max([linfty_error_p; abs(sol_num-sol_exact)]);
 end
 l2error_p = sqrt(l2error_p);
+l2_error_p = l2error_p;
 
 disp(['Pressure Error in maximum norm ' num2str(linfty_error_p) ' in L2 norm ' num2str(l2error_p)])
 
 toc;
-
-% plotting solution from 0 to tf every 6e-4
-dt_plot = 6e-4;
-NT_plot = round(Tf/dt_plot);
-t_plot = 0:dt_plot:Tf;
-index_t = round((t_plot/Tf)*NT) + 1;
-
-figure(3);
-xx_unit = -1:0.05:1;
-xx = zeros(n,length(xx_unit));
-ppp = zeros(size(xx, 1), size(xx, 2), NT_plot+1); % creates a 3D matrix of size(xx), size(xx), NT_plot+1
-val = evaluate_lagrange_basis(xunit, xx_unit);
-for e=1:n
-    xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
-    ppp(e, :, 1) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(1));
-    ppp(e, :, 2) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(2));
-    ppp(e, :, 3) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(3));
-    ppp(e, :, 4) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(4));
-    ppp(e, :, 5) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(5));
-    ppp(e, :, 6) = val' * w((e+n)*kp1-k: (e+n)*kp1, index_t(6));
 end
-p_anal_0 = analytical_p(xx, t_plot(1));
-p_anal_1 = analytical_p(xx, t_plot(2));
-p_anal_2 = analytical_p(xx, t_plot(3));
-p_anal_3 = analytical_p(xx, t_plot(4));
-p_anal_4 = analytical_p(xx, t_plot(5));
-p_anal_5 = analytical_p(xx, t_plot(6));
-
-p_anal = zeros(size(xx, 1), size(xx, 2), NT_plot+1);
-for i = 1:(NT_plot+1)
-    p_anal(:,:,i) = analytical_p(xx, t_plot(i));
-end
-
-for i = 1:6
-    subplot(2, 3, i);
-    plot(xx(1,:), ppp(1, :, i),'r-', xx(1,:), p_anal(1, :, i),'b');
-    title(['Subplot ', num2str(i)]);
-    hold on
-    plot(xx',ppp(:,:,i)','r-');
-    plot(xx',p_anal(:,:,i)','b-');
-    hold off
-    xlabel('x')
-    ylabel('p_h(x)')
-    title(['degree=' num2str(k) ', n=' num2str(n) ' elements, t = ' num2str(t_plot(i))])
-    legend(['p_h(x, ' num2str(t_plot(i)) ')'], ['p(x,' num2str(t_plot(i)) ')'])
-end
-
 
 function rhs = evaluate_acoustic_rhs(flux_type, w, c, rho, bv, values, derivatives, weights, bc)
     switch flux_type
@@ -270,6 +264,7 @@ function rhs = lax_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc)
 %   OUT:
 % rhs: vector of right hand side to be multiplied by Minv
 % ------------------------------------------------------------------------------------------- %
+
 kp1 = size(values, 1); % degree + 1
 n = length(w)/(2*kp1);
 rhs = zeros(size(w));
@@ -401,13 +396,13 @@ for e = 1:n
 
     numflux_v = lambda;
     % check n
-    numflux_p = (vminus + (tau/rho) * norm * (pminus - lambda));
+    numflux_p = vminus + (tau/rho) * norm * (pminus - lambda);
 
     rhs((e-1)*kp1+1) = rhs((e-1)*kp1+1) + numflux_v;
     rhs((e+n-1)*kp1+1) = rhs((e+n-1)*kp1+1) + numflux_p;
 
     % == RIGHT INTERFACE ==
-    vminus = ve(kp1); 
+    vminus = ve(kp1);
     pminus = pe(kp1);
     norm = +1;
     if e == n
