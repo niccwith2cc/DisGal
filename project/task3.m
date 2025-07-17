@@ -6,11 +6,11 @@ close all
 clear
 
 n = 40;         % number of elements
-Tf = 10;        % final time
-bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
-k = 3;          % polynomial degree
-c = 1;          % advection speed
-rho = 1;        % density
+Tf = 3e-3;        % final time
+bc = 2;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
+k = 2;          % polynomial degree
+c = 340;        % advection speed
+rho = 1.2;      % density
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 nc = k+1;       % number of quadrature points
@@ -20,8 +20,8 @@ plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
 flux_type = 1;  % choose between Lax-Friedrich (0) or HDG (1)
 
 % analytical solution
-analytical_v = @(x,t)cos(pi*x)*cos(pi*t);
-analytical_p = @(x,t)sin(pi*x)*sin(pi*t);
+analytical_v = @(x,t)zeros(size(x));
+analytical_p = @(x,t)exp( -(x-0.5).^2/(0.02^2) );
 
 % set quadrature formula and quadrature nodes for integration
 [pg,wg] = get_gauss_quadrature(nc);
@@ -225,7 +225,6 @@ function rhs = lax_flux_rhs(w, c, rho, bv, values, derivatives, weights, bc)
 %   OUT:
 % rhs: vector of right hand side to be multiplied by Minv
 % ------------------------------------------------------------------------------------------- %
-
 kp1 = size(values, 1); % degree + 1
 n = length(w)/(2*kp1);
 rhs = zeros(size(w));
