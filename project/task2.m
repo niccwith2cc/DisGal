@@ -11,28 +11,33 @@ muted_green = [0.4, 0.7, 0.6];
 warm_red = [0.8, 0.4, 0.4];
 soft_blue = [0.4, 0.6, 0.8];
 
-L2_pressure = zeros(length(k), length(n));
+L2_pressure = zeros(length(n), 2*length(k));
 
-for i = 1:length(k)
-    for j = 1:length(n)
-        L2_pressure(i, j) = acoustic_solver_integrate(k(i), n(j));
+for j = 1:length(k)
+    for l = 1:length(n)
+        L2_pressure(l, j) = acoustic_solver_integrate(k(j), n(l), flux_type(1));
+        L2_pressure(l, j+4) = acoustic_solver_integrate(k(j), n(l), flux_type(2));
     end
 end
 
 % plotting
-marker = ['.-', 'x-', '^-', 's-'];
-color = [soft_blue, warm_red, muted_green, soft_purple];
+marker = {'.-', 'x-', '^-', 's-'};
+color = {soft_blue, warm_red, muted_green, soft_purple};
 figure;
+hold on
 for i = 1:length(k)
-    semilogy(n, L2_pressure(i, :), marker(i), 'Color', color(i), 'MarkerFaceColor', color(i), 'DisplayName', num2str(k(i)))
-    hold on;
+    semilogy(n, L2_pressure(:, i), marker{i}, 'Color', color{i}, 'MarkerFaceColor', color{i}, 'DisplayName', ['k = ', num2str(k(i))] )
 end
 hold off
+grid on
+xlim([5 80])
+ylim([1e-13 1e-1])
 xlabel('Number of elements n')
 ylabel('L_2 Pressure Error')
 title('Lax Flux Convergence of L_2 Pressure Error')
+legend
 
-function L2_pressure = acoustic_solver_integrate(k, n)
+function L2_pressure = acoustic_solver_integrate(k, n, flux_type)
 % 1D acoustic solver based on pointwise evaluation of fluxes and using
 % integrals for the element advection term
 % Assumption: Nodal polynomials with node points at interval end points
@@ -47,7 +52,6 @@ nc = k+1;       % number of quadrature points
 left = 0;       % left end of the domain
 right = 1;      % right end of the domain
 plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
-flux_type = 0;  % choose between Lax-Friedrich (0) or HDG (1)
 
 % analytical solution
 analytical_v = @(x,t)cos(pi*x)*cos(pi*t);

@@ -234,7 +234,7 @@ for e=1:n
     ve = w((e-1)*kp1+1: e*kp1); % 1 to kp1*n
     pe = w((e+n-1)*kp1+1: (e+n)*kp1); % from kp1*n+1 to 2*kp1*n
 
-    % interpolate v to quadrature points
+    % interpolate v and p to quadrature points
     v_quad = values' * ve;
     p_quad = values' * pe;
     flux_v = weights .* p_quad;
@@ -377,7 +377,7 @@ for e = 1:n
                 lambda = (1 /(tau + 1/c)) * (rho * vminus * norm + tau * pminus);
         end
     else
-        vplus = w(e*kp1+1); % e > 1: w(kp1:(e-1)*kp1)
+        vplus = w(e*kp1+1); % e < n: w(kp1:(e-1)*kp1)
         pplus = w((e+n)*kp1+1); 
         % check n
         lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);

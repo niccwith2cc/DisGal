@@ -7,7 +7,7 @@ clear
 
 n = 20;         % number of elements
 Tf = 3e-3;      % final time
-bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
+bc = 2;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
 k = 2;          % polynomial degree
 c = 340;        % advection speed
 rho = 1.2;      % density

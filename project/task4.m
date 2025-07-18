@@ -14,25 +14,27 @@ for i = 1:length(flux_type)
 end
 
 figure(1)
-semilogy(Courant, L2_p(1, :), 'r-s', 'LineWidth', 2, 'MarkerFaceColor', 'r', 'DisplayName', 'Lax Pressure')
+semilogy(Courant, L2_p(1, :), 'ro-', 'LineWidth', 1.2, 'MarkerFaceColor', 'r', 'DisplayName', 'Lax Pressure')
 hold on
-semilogy(Courant, L2_p(2, :), 'b*-', 'LineWidth', 2, 'MarkerFaceColor', 'b', 'DisplayName', 'HDG Pressure')
+semilogy(Courant, L2_p(2, :), 'b-', 'LineWidth', 1, 'MarkerFaceColor', 'b', 'DisplayName', 'HDG Pressure')
 xlabel('Courant number (Cr)')
 ylabel('L_2 Pressure error')
 title('Change of L_2 Pressure Error vs. Courant Number');
 xlim([0.4, max(Courant)]);  
 ylim([1e-13, 1e+4]);
+legend
 hold off;
 
 figure(2)
-semilogy(Courant, L2_v(1, :), 'r-s', 'LineWidth', 2, 'MarkerFaceColor', 'r', 'DisplayName', 'Lax Velocity')
+semilogy(Courant, L2_v(1, :), 'r-o', 'LineWidth', 1.2, 'MarkerFaceColor', 'r', 'DisplayName', 'Lax Velocity')
 hold on
-semilogy(Courant, L2_v(2, :), 'b*-', 'LineWidth', 2, 'MarkerFaceColor', 'b', 'DisplayName', 'HDG Velocity')
+semilogy(Courant, L2_v(2, :), 'b-', 'LineWidth', 1, 'MarkerFaceColor', 'b', 'DisplayName', 'HDG Velocity')
 xlabel('Courant number (Cr)')
 ylabel('L_2 Velocity error')
 title('Change of L_2 Velocity Error vs. Courant Number');
 xlim([0.4, max(Courant)]);  
 ylim([1e-13, 1e+4]);
+legend
 hold off;
 
 
