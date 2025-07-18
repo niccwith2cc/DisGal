@@ -43,7 +43,7 @@ function L2_pressure = acoustic_solver_integrate(k, n, flux_type)
 % Assumption: Nodal polynomials with node points at interval end points
 
 Tf = 10;        % final time
-bc = 0;         % select boundary condition: Dirichlet (0), Neumann(1), Absorbing(2)
+bc = 0;         % select boundary condition: Dirichlet (0), Absorbing(1)
 c = 1;          % advection speed
 rho = 1;        % density
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
@@ -100,8 +100,6 @@ switch bc
     case 0
         bc_name = 'Dirichlet';
     case 1
-        bc_name = 'Neumann';
-    case 2
         bc_name = 'Absorbing';
 end
 
@@ -270,7 +268,7 @@ for e=1:n
     ve = w((e-1)*kp1+1: e*kp1); % 1 to kp1*n
     pe = w((e+n-1)*kp1+1: (e+n)*kp1); % from kp1*n+1 to 2*kp1*n
 
-    % interpolate v to quadrature points
+    % interpolate v and p to quadrature points
     v_quad = values' * ve;
     p_quad = values' * pe;
     flux_v = weights .* p_quad;
@@ -289,10 +287,7 @@ for e=1:n
             case 0 % Dirichlet condition
                 vplus = vminus;
                 pplus = 2*bv(3)-pminus;
-            case 1 % Neumann
-                vplus = -bv(1)/rho;
-                pplus = pminus;
-            case 2 % Absorbing
+            case 1 % Absorbing
                 vplus = -pminus/(rho*c);
                 pplus = pminus;
         end
@@ -313,10 +308,7 @@ for e=1:n
             case 0 % Dirichlet condition
                 vplus = vminus;
                 pplus = 2*bv(4)-pminus;
-            case 1 % Neumann
-                vplus = bv(2)/rho;
-                pplus = pminus;
-            case 2 % Absorbing
+            case 1 % Absorbing
                 vplus = pminus/(rho*c);
                 pplus = pminus;
         end
@@ -379,9 +371,7 @@ for e = 1:n
             case 0 % Dirichlet
                 pplus = bv(3);
                 lambda = pplus;
-            case 1 % Neumann check n
-                lambda = (1/tau) * rho * vminus * norm + pminus;
-            case 2 % Absorbing check n
+            case 1 % Absorbing check n
                 lambda = (1 /(tau + 1/c))* (rho * vminus * norm + tau * pminus);
         end
     else 
@@ -407,13 +397,11 @@ for e = 1:n
             case 0 % Dirichlet
                 pplus = bv(4);
                 lambda = pplus;
-            case 1 % Neumann check n
-                lambda = (1/tau) * rho * vminus * norm + pminus;
-            case 2 % Absorbing check n
+            case 1 % Absorbing check n
                 lambda = (1 /(tau + 1/c)) * (rho * vminus * norm + tau * pminus);
         end
     else
-        vplus = w(e*kp1+1); % e > 1: w(kp1:(e-1)*kp1)
+        vplus = w(e*kp1+1); % e < n: w(kp1:(e-1)*kp1)
         pplus = w((e+n)*kp1+1); 
         % check n
         lambda = (rho / (2*tau)) * (vminus - vplus) * norm + 1/2 * (pminus + pplus);

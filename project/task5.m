@@ -1,17 +1,68 @@
-% function acoustic_solver_integrate
+close all
+clear
+Courant = 1:0.01:3.08;
+quad_type = [0, 1]; % quadrature type (0) Gauss, (1) Gauss Lobatto
+
+soft_purple = [0.6, 0.4, 0.8];
+dusty_pink = [0.9, 0.6, 0.7];
+muted_green = [0.4, 0.7, 0.6];
+warm_red = [0.8, 0.4, 0.4];
+soft_blue = [0.4, 0.6, 0.8];
+
+color = {soft_blue, warm_red, muted_green, soft_purple};
+
+L2_v = zeros(2, length(Courant));
+L2_p = zeros(2, length(Courant));
+
+for i = 1:length(quad_type)
+    for j = 1:length(Courant)
+        disp(['using Cr: ', num2str(Courant(j))] );
+        [L2_v(i, j) , L2_p(i, j)] = acoustic_solver_integrate(Courant(j), quad_type(i)); 
+    end
+end
+
+font_size = 18;
+figure(1)
+semilogy(Courant, L2_p(1, :), '-', 'Color', warm_red ,'LineWidth', 1.5, 'MarkerFaceColor', warm_red, 'DisplayName', 'Gauss')
+hold on
+semilogy(Courant, L2_p(2, :), '-', 'Color', soft_blue ,'LineWidth', 1, 'MarkerFaceColor', soft_blue, 'DisplayName', 'Gauss Lobatto')
+xlabel('Courant number (Cr)', 'FontSize', font_size)
+ylabel('L_2 Pressure error', 'FontSize', font_size)
+title('Change of L_2 Pressure Error vs. Courant Number', 'FontSize', font_size+2);
+xlim([1, max(Courant)]);  
+ylim([1e-13, 1e+1]);
+set(gca, 'FontSize', font_size)
+legend('FontSize', font_size)
+hold off;
+
+figure(2)
+semilogy(Courant, L2_p(1, :), '-', 'Color', warm_red ,'LineWidth', 1.5, 'MarkerFaceColor', warm_red, 'DisplayName', 'Gauss')
+hold on
+semilogy(Courant, L2_p(2, :), '-', 'Color', soft_blue ,'LineWidth', 1, 'MarkerFaceColor', soft_blue, 'DisplayName', 'Gauss Lobatto')
+xlabel('Courant number (Cr)', 'FontSize', font_size)
+ylabel('L_2 Velocity error', 'FontSize', font_size)
+title('Change of L_2 Velocity Error vs. Courant Number', 'FontSize', font_size+2);
+xlim([1, max(Courant)]);  
+ylim([1e-13, 1e+1]);
+set(gca, 'FontSize', font_size)
+legend('FontSize', font_size)
+hold off;
+
+
+function [l2_error_v, l2_error_p] = acoustic_solver_integrate(Courant, quad_type)
 % 1D acoustic solver based on pointwise evaluation of fluxes and using
 % integrals for the element advection term
 % Assumption: Nodal polynomials with node points at interval end points
-close all
 clear
+close all
 
-n = 5;         % number of elements
-Tf = 10;        % final time
+n = 80;         % number of elements
+Tf = 2;        % final time
 bc = 0;         % select boundary condition: Dirichlet (0), Absorbing(1)
-k = 1;          % polynomial degree
+k = 4;          % polynomial degree
 c = 1;          % advection speed
 rho = 1;        % density
-Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
+Cr = Courant/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 nc = k+1;       % number of quadrature points
 left = 0;       % left end of the domain
@@ -24,8 +75,11 @@ analytical_v = @(x,t)cos(pi*x)*cos(pi*t);
 analytical_p = @(x,t)sin(pi*x)*sin(pi*t);
 
 % set quadrature formula and quadrature nodes for integration
-[pg,wg] = get_gauss_quadrature(nc);
-
+if quad_type == 0
+    [pg,wg] = get_gauss_quadrature(nc);
+else
+    [pg,wg] = get_gauss_lobatto_quadrature(nc);
+end
 % set the node points for the Lagrange polynomials
 xunit = get_gauss_lobatto_quadrature(k+1);
 
@@ -65,7 +119,7 @@ end
 switch bc
     case 0
         bc_name = 'Dirichlet';
-    case 1
+    case 2
         bc_name = 'Absorbing';
 end
 
@@ -102,65 +156,65 @@ end
 
 % plot velocity numerical solution (red), the analytical solution (blue), and
 % the initial condition
-figure(1)
-if plot_accurate == 1
-    xx_unit = -1:0.05:1;
-    xx = zeros(n,length(xx_unit));
-    vv_0 = zeros(size(xx));
-    vv = zeros(size(xx));
-    val = evaluate_lagrange_basis(xunit, xx_unit);
-    for e=1:n
-        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
-        vv_0(e, :) = val' * w(e*kp1-k:e*kp1, 1);
-        vv(e, :) = val' * w(e*kp1-k:e*kp1, end);
-    end
-    v_anal = analytical_v(xx, Tf);
-    plot(xx(1,:),vv_0(1,:),'k:',xx(1,:),vv(1,:),'r-',xx(1,:),v_anal(1,:),'b');
-    hold on
-    plot(xx',vv_0','k:');
-    plot(xx',vv','r*-');
-    plot(xx',v_anal','b-');
-    hold off
-else
-    v_s = w(e*kp1-k:e*kp1, 1);
-    v_f = w(e*kp1-k:e*kp1, end);
-    plot(x,v_s,'k:', x, v_f,'r-', x, analytical_v(x, Tf),'b')
-end
-xlabel('x')
-ylabel('v_h(x)')
-title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
-legend('v_h(x,0)',['v_h(x,' num2str(Tf) ')'],['v(x,' num2str(Tf) ')'])
-
-% plot pressure numerical solution (red), the analytical solution (blue), and
-% the initial condition
-figure(2)
-if plot_accurate == 1
-    xx_unit = -1:0.05:1;
-    xx = zeros(n,length(xx_unit));
-    pp_0 = zeros(size(xx));
-    pp = zeros(size(xx));
-    val = evaluate_lagrange_basis(xunit, xx_unit);
-    for e=1:n
-        xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
-        pp_0(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, 1);
-        pp(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, end);
-    end  
-    p_anal = analytical_p(xx, Tf);
-    plot(xx(1,:),pp_0(1,:),'k:',xx(1,:),pp(1,:),'r-',xx(1,:),p_anal(1,:),'b');
-    hold on
-    plot(xx',pp_0','k:');
-    plot(xx',pp','r-');
-    plot(xx',p_anal','b-');
-    hold off
-else
-    p_s = w((e+n)*kp1-k: (e+n)*kp1, 1);
-    p_f = w((e+n)*kp1-l: (e+n)*kp1, end);
-    plot(x,p_s,'k:', x, p_f,'r-', x, analytical_p(x, Tf),'b')
-end
-xlabel('x')
-ylabel('p_h(x)')
-title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
-legend('p_h(x,0)',['p_h(x,' num2str(Tf) ')'],['p(x,' num2str(Tf) ')'])
+% figure(1)
+% if plot_accurate == 1
+%     xx_unit = -1:0.05:1;
+%     xx = zeros(n,length(xx_unit));
+%     vv_0 = zeros(size(xx));
+%     vv = zeros(size(xx));
+%     val = evaluate_lagrange_basis(xunit, xx_unit);
+%     for e=1:n
+%         xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
+%         vv_0(e, :) = val' * w(e*kp1-k:e*kp1, 1);
+%         vv(e, :) = val' * w(e*kp1-k:e*kp1, end);
+%     end
+%     v_anal = analytical_v(xx, Tf);
+%     plot(xx(1,:),vv_0(1,:),'k:',xx(1,:),vv(1,:),'r-',xx(1,:),v_anal(1,:),'b');
+%     hold on
+%     plot(xx',vv_0','k:');
+%     plot(xx',vv','r*-');
+%     plot(xx',v_anal','b-');
+%     hold off
+% else
+%     v_s = w(e*kp1-k:e*kp1, 1);
+%     v_f = w(e*kp1-k:e*kp1, end);
+%     plot(x,v_s,'k:', x, v_f,'r-', x, analytical_v(x, Tf),'b')
+% end
+% xlabel('x')
+% ylabel('v_h(x)')
+% title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
+% legend('v_h(x,0)',['v_h(x,' num2str(Tf) ')'],['v(x,' num2str(Tf) ')'])
+% 
+% % plot pressure numerical solution (red), the analytical solution (blue), and
+% % the initial condition
+% figure(2)
+% if plot_accurate == 1
+%     xx_unit = -1:0.05:1;
+%     xx = zeros(n,length(xx_unit));
+%     pp_0 = zeros(size(xx));
+%     pp = zeros(size(xx));
+%     val = evaluate_lagrange_basis(xunit, xx_unit);
+%     for e=1:n
+%         xx(e, :) = y(2*e-1)+(y(2*e)-y(2*e-1))*(0.5+0.5*xx_unit);
+%         pp_0(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, 1);
+%         pp(e, :) = val' * w((e+n)*kp1-k: (e+n)*kp1, end);
+%     end  
+%     p_anal = analytical_p(xx, Tf);
+%     plot(xx(1,:),pp_0(1,:),'k:',xx(1,:),pp(1,:),'r-',xx(1,:),p_anal(1,:),'b');
+%     hold on
+%     plot(xx',pp_0','k:');
+%     plot(xx',pp','r-');
+%     plot(xx',p_anal','b-');
+%     hold off
+% else
+%     p_s = w((e+n)*kp1-k: (e+n)*kp1, 1);
+%     p_f = w((e+n)*kp1-l: (e+n)*kp1, end);
+%     plot(x,p_s,'k:', x, p_f,'r-', x, analytical_p(x, Tf),'b')
+% end
+% xlabel('x')
+% ylabel('p_h(x)')
+% title(['degree=' num2str(k) ', n=' num2str(n) ' elements, dt = ' num2str(dt)])
+% legend('p_h(x,0)',['p_h(x,' num2str(Tf) ')'],['p(x,' num2str(Tf) ')'])
 
 % calculate L2 and Linf for velocity
 l2error_v = 0;
@@ -175,6 +229,7 @@ for e=1:n
     linfty_error_v = max([linfty_error_v; abs(sol_num-sol_exact)]);
 end
 l2error_v = sqrt(l2error_v);
+l2_error_v = l2error_v;
 
 disp(['Velocity Error in maximum norm ' num2str(linfty_error_v) ' in L2 norm ' num2str(l2error_v)])
 
@@ -191,10 +246,12 @@ for e=1:n
     linfty_error_p = max([linfty_error_p; abs(sol_num-sol_exact)]);
 end
 l2error_p = sqrt(l2error_p);
+l2_error_p = l2error_p;
 
 disp(['Pressure Error in maximum norm ' num2str(linfty_error_p) ' in L2 norm ' num2str(l2error_p)])
 
 toc;
+end
 
 function rhs = evaluate_acoustic_rhs(flux_type, w, c, rho, bv, values, derivatives, weights, bc)
     switch flux_type
