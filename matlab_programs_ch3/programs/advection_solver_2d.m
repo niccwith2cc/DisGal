@@ -4,7 +4,7 @@ function advection_solver_2d
 % speed
 % Assumption: Nodal polynomials with node points at interval end points
 
-N = [10,10];    % number of elements
+N = [20, 20];    % number of elements
 Tf = 2;         % final time
 k = 5;          % polynomial degree
 Cr = 0.5/k^1.5; % Courant number -> sets time step size in dt = Cr * h / a

@@ -7,7 +7,7 @@ function advection_solver_variable
 n = 10;         % number of elements
 Tf = 2;         % final time
 k = 5;          % polynomial degree
-periodic = 1;   % switch between Dirichlet conditions (0) and periodic (1)
+periodic = 0;   % switch between Dirichlet conditions (0) and periodic (1)
 Cr = 0.4/k^2;   % Courant number -> sets time step size in dt = Cr * h / a
 alpha = 0.0;    % flux type, 0 = upwind, 1 = central
 nc = k+1;       % number of quadrature points
@@ -16,7 +16,7 @@ right = 1;      % right end of the domain
 plot_accurate = 1; % plot only on nodes (0) or with more resolution (1)
 
 % variable advection speed
-a = @(x,t)1;%(1-x.^2).^5+1;
+a = @(x,t)(1-x.^2).^5+1;
 
 % solution only valid for a=1
 %analytical = @(x,t)sin(4*pi*(x-t));
